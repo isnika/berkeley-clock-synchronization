@@ -1,0 +1,15 @@
+<Window x:Class="Berkeley.Desktop.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Berkeley Time Sync"
+        Height="450"
+        Width="800"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <TextBlock Text="Berkeley Time Sync — Desktop Shell (TV3)"
+                   VerticalAlignment="Center"
+                   HorizontalAlignment="Center"
+                   FontSize="16" />
+    </Grid>
+</Window>
+
