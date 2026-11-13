@@ -13,18 +13,10 @@ namespace Berkeley.Engine.Tests;
 [TestClass]
 public class OffsetCalculationTests
 {
-    // ── Test tính offset ───────────────────────────────────────────────────
-
     [TestMethod]
     [Description("Worker nhanh hơn Master 100ms → offset dương")]
     public void ComputeOffset_WorkerFasterThanMaster_ReturnsPositiveOffset()
     {
-        // t1=1000 (Master gửi), t2=1150 (Worker nhận, Worker nhanh hơn 100ms)
-        // t3=1160 (Worker gửi lại), t4=1210 (Master nhận)
-        // RTT thực = (1210-1000)-(1160-1150) = 210 - 10 = 200ms
-        // Offset = ((1150-1000)+(1160-1210))/2 = (150 + (-50))/2 = 50ms ≠ 100ms
-        // → offset 50ms vì RTT không đối xứng
-
         var (offset, rtt) = BerkeleyCalculator.ComputeOffset(
             t1MasterSendUtcMs: 1000,
             t2WorkerRecvUtcMs: 1150,
@@ -39,15 +31,12 @@ public class OffsetCalculationTests
     [Description("Worker chậm hơn Master → offset âm")]
     public void ComputeOffset_WorkerSlowerThanMaster_ReturnsNegativeOffset()
     {
-        // Master tại 1000, Worker thực sự tại 900 (chậm hơn 100ms)
-        // t2 = 950 (Worker nhận), t3 = 960, t4 = 1210
         var (offset, rtt) = BerkeleyCalculator.ComputeOffset(
             t1MasterSendUtcMs: 1000,
             t2WorkerRecvUtcMs: 950,
             t3WorkerSendUtcMs: 960,
             t4MasterRecvUtcMs: 1210);
 
-        // offset = ((950-1000)+(960-1210))/2 = (-50 + (-250))/2 = -150ms
         Assert.AreEqual(-150.0, offset, delta: 0.001);
         Assert.IsTrue(offset < 0, "Worker chậm hơn → offset phải âm");
     }
@@ -56,7 +45,6 @@ public class OffsetCalculationTests
     [Description("Hai đồng hồ hoàn toàn đồng bộ → offset = 0")]
     public void ComputeOffset_PerfectSync_ReturnsZeroOffset()
     {
-        // RTT = 100ms, trễ 2 chiều đều nhau (50ms mỗi chiều)
         var (offset, rtt) = BerkeleyCalculator.ComputeOffset(
             t1MasterSendUtcMs: 1000,
             t2WorkerRecvUtcMs: 1050,
@@ -82,7 +70,6 @@ public class AveragingTests
     [Description("Ví dụ 6 máy từ tài liệu: giờ chung = 10:05 (d_avg = -5 phút)")]
     public void ComputeAdjustments_SixNodes_AverageCorrect()
     {
-        // Master tại 10:10 (offset=0), Workers lần lượt: -10, -8, -6, -4, -2 phút
         var samples = new List<ClockSample>
         {
             MakeSample("W1", -10 * 60_000),
@@ -94,18 +81,13 @@ public class AveragingTests
 
         var result = BerkeleyCalculator.ComputeAdjustments("Master", samples)!;
 
-        // d_avg = (0 + -10 + -8 + -6 + -4 + -2) / 6 = -30/6 = -5 phút
         double expectedAvgMs = -5 * 60_000;
         Assert.AreEqual(expectedAvgMs, result.AverageOffsetMs, delta: 0.001);
-
-        // Master điều chỉnh: a_M = d_avg = -5 phút (nhảy lùi)
         Assert.AreEqual(expectedAvgMs, result.MasterAdjustment.AdjustmentMs, delta: 0.001);
 
-        // W1: a = -5 - (-10) = +5 phút (chỉnh tiến)
         var w1 = result.WorkerAdjustments.First(a => a.NodeId == "W1");
         Assert.AreEqual(5 * 60_000.0, w1.AdjustmentMs, delta: 0.001);
 
-        // W5: a = -5 - (-2) = -3 phút (chỉnh lùi)
         var w5 = result.WorkerAdjustments.First(a => a.NodeId == "W5");
         Assert.AreEqual(-3 * 60_000.0, w5.AdjustmentMs, delta: 0.001);
     }
@@ -125,8 +107,6 @@ public class AveragingTests
         var samples = new List<ClockSample> { MakeSample("W1", 1000) };
         var result = BerkeleyCalculator.ComputeAdjustments("Master", samples)!;
 
-        // d_avg = (0 + 1000) / 2 = 500ms
-        // Master tự chỉnh +500ms
         Assert.AreEqual(500.0, result.MasterAdjustment.AdjustmentMs, delta: 0.001);
     }
 }
@@ -221,4 +201,91 @@ public class MessageEnvelopeTests
     }
 }
 
+/// <summary>
+/// [A2, A10] Unit test kiểm tra tính hợp lệ của mẫu (ValidateSample) và độ trải (ComputeSpread).
+/// </summary>
+[TestClass]
+public class ValidateSampleTests
+{
+    private static ClockSample CreateSample(string roundId = "round-1", double rttMs = 50) =>
+        new(
+            RoundId: roundId,
+            WorkerNodeId: "W1",
+            T1MasterSendUtcMs: 1000,
+            T2WorkerRecvUtcMs: 1020,
+            T3WorkerSendUtcMs: 1025,
+            T4MasterRecvUtcMs: 1075,
+            OffsetMs: 5,
+            RttMs: rttMs,
+            Status: SampleStatus.Valid
+        );
 
+    [TestMethod]
+    [Description("Mẫu hợp lệ trong điều kiện bình thường")]
+    public void ValidateSample_ValidSample_ReturnsTrue()
+    {
+        var sample = CreateSample();
+        var (isValid, reason) = BerkeleyCalculator.ValidateSample(
+            sample, "round-1", nowMonotonicMs: 2000, sampleMaxAgeMs: 5000, sampleTakenMonotonicMs: 1500, maxRttMs: 3000);
+
+        Assert.IsTrue(isValid);
+        Assert.IsNull(reason);
+    }
+
+    [TestMethod]
+    [Description("Mẫu từ vòng cũ (sai RoundId) -> Từ chối Stale round ID")]
+    public void ValidateSample_WrongRoundId_ReturnsFalse()
+    {
+        var sample = CreateSample(roundId: "old-round");
+        var (isValid, reason) = BerkeleyCalculator.ValidateSample(
+            sample, "round-1", nowMonotonicMs: 2000, sampleMaxAgeMs: 5000, sampleTakenMonotonicMs: 1500, maxRttMs: 3000);
+
+        Assert.IsFalse(isValid);
+        Assert.IsTrue(reason?.Contains("Stale round ID"));
+    }
+
+    [TestMethod]
+    [Description("Mẫu quá cũ (age > sampleMaxAgeMs) -> Từ chối Sample too old")]
+    public void ValidateSample_SampleTooOld_ReturnsFalse()
+    {
+        var sample = CreateSample();
+        var (isValid, reason) = BerkeleyCalculator.ValidateSample(
+            sample, "round-1", nowMonotonicMs: 10000, sampleMaxAgeMs: 5000, sampleTakenMonotonicMs: 1000, maxRttMs: 3000);
+
+        Assert.IsFalse(isValid);
+        Assert.IsTrue(reason?.Contains("Sample too old"));
+    }
+
+    [TestMethod]
+    [Description("Mẫu có RTT âm -> Từ chối Negative RTT")]
+    public void ValidateSample_NegativeRtt_ReturnsFalse()
+    {
+        var sample = CreateSample(rttMs: -10);
+        var (isValid, reason) = BerkeleyCalculator.ValidateSample(
+            sample, "round-1", nowMonotonicMs: 2000, sampleMaxAgeMs: 5000, sampleTakenMonotonicMs: 1500, maxRttMs: 3000);
+
+        Assert.IsFalse(isValid);
+        Assert.IsTrue(reason?.Contains("Negative RTT"));
+    }
+
+    [TestMethod]
+    [Description("Mẫu có RTT vượt ngưỡng maxRttMs -> Từ chối RTT too high")]
+    public void ValidateSample_RttTooHigh_ReturnsFalse()
+    {
+        var sample = CreateSample(rttMs: 4000);
+        var (isValid, reason) = BerkeleyCalculator.ValidateSample(
+            sample, "round-1", nowMonotonicMs: 2000, sampleMaxAgeMs: 5000, sampleTakenMonotonicMs: 1500, maxRttMs: 3000);
+
+        Assert.IsFalse(isValid);
+        Assert.IsTrue(reason?.Contains("RTT too high"));
+    }
+
+    [TestMethod]
+    [Description("ComputeSpread trả về độ chênh max - min")]
+    public void ComputeSpread_MultipleOffsets_CalculatesCorrectSpread()
+    {
+        var offsets = new List<double> { -15.0, 0.0, 25.0, 10.0 };
+        double spread = BerkeleyCalculator.ComputeSpread(offsets);
+        Assert.AreEqual(40.0, spread, 0.001); // 25.0 - (-15.0) = 40.0
+    }
+}
