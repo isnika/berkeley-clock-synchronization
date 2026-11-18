@@ -1,15 +1,935 @@
 <Window x:Class="Berkeley.Desktop.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Berkeley Time Sync"
-        Height="450"
-        Width="800"
-        WindowStartupLocation="CenterScreen">
-    <Grid Margin="16">
-        <TextBlock Text="Berkeley Time Sync — Desktop Shell (TV3)"
-                   VerticalAlignment="Center"
-                   HorizontalAlignment="Center"
-                   FontSize="16" />
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:converters="clr-namespace:Berkeley.Desktop.Converters"
+        xmlns:vm="clr-namespace:Berkeley.Desktop.ViewModels"
+        mc:Ignorable="d"
+        Title="Berkeley Time Sync — Hệ Thống Đồng Bộ Đồng Hồ Phân Tán (Cụm 6 Máy) • PTIT HCM"
+        Height="950" Width="1480"
+        MinHeight="750" MinWidth="1180"
+        WindowStartupLocation="CenterScreen"
+        Background="#0F172A"
+        Foreground="#F8FAFC"
+        FontFamily="Segoe UI, Segoe UI Variable Display, Arial">
+
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <converters:BoolToVisibilityConverter x:Key="InverseBoolToVis" Invert="True" />
+        <converters:EqualsToVisibilityConverter x:Key="EqualsToVis" />
+        <converters:TabActiveBrushConverter x:Key="TabBrushConv" />
+        <converters:TabActiveBgConverter x:Key="TabBgConv" />
+
+        <!-- Styles for Cards -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="#1E293B" />
+            <Setter Property="BorderBrush" Value="#334155" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+
+        <!-- Top Header Action Button (Sync) -->
+        <Style x:Key="SyncActionButton" TargetType="Button">
+            <Setter Property="Background" Value="#F59E0B" />
+            <Setter Property="Foreground" Value="#0F172A" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="16,9" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#D97706"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#475569"/>
+                                <Setter Property="Foreground" Value="#94A3B8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Crash Master Action Button -->
+        <Style x:Key="CrashActionButton" TargetType="Button">
+            <Setter Property="Background" Value="#7F1D1D" />
+            <Setter Property="BorderBrush" Value="#EF4444" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#FCA5A5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#991B1B"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Secondary Outline Button -->
+        <Style x:Key="OutlineButton" TargetType="Button">
+            <Setter Property="Background" Value="#1E293B" />
+            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#334155"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Quick Drift Pill Button -->
+        <Style x:Key="QuickDriftButton" TargetType="Button">
+            <Setter Property="Background" Value="#334155" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#475569"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Nav Tab Button Style -->
+        <Style x:Key="NavTabButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#94A3B8" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="tabBorder" Background="{TemplateBinding Background}" CornerRadius="6,6,0,0" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="#38BDF8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Form TextBox Style -->
+        <Style x:Key="DarkTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#0F172A" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="BorderBrush" Value="#334155" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="CaretBrush" Value="#38BDF8" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Top Bar Header -->
+            <RowDefinition Height="Auto"/> <!-- Navigation Tabs Bar -->
+            <RowDefinition Height="*"/>    <!-- Main Content Body (Tabs) -->
+            <RowDefinition Height="Auto"/> <!-- Bottom Status Bar Footer -->
+        </Grid.RowDefinitions>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- 1. TOP HEADER BAR: IDENTITY, REAL OS CLOCK, ACTION CONTROLS        -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="0" Background="#1E293B" BorderBrush="#334155" BorderThickness="0,0,0,1" Padding="18,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/> <!-- Brand & Node Info -->
+                    <ColumnDefinition Width="*"/>    <!-- Real OS Clock (Center) -->
+                    <ColumnDefinition Width="Auto"/> <!-- Quick Action Buttons -->
+                </Grid.ColumnDefinitions>
+
+                <!-- Brand & Node Identity -->
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="⏱️" FontSize="22" Margin="0,0,8,0"/>
+                        <TextBlock Text="BERKELEY TIME SYNC" FontSize="17" FontWeight="Bold" Foreground="#F8FAFC"/>
+                        <Border Background="{Binding RoleBrush}" CornerRadius="12" Padding="9,2" Margin="10,0,0,0">
+                            <TextBlock Text="{Binding RoleBadge}" FontWeight="Bold" FontSize="11" Foreground="#0F172A"/>
+                        </Border>
+                        <Border Background="{Binding NetworkModeBrush}" CornerRadius="10" Padding="8,2" Margin="8,0,0,0">
+                            <TextBlock Text="{Binding NetworkModeBadge}" FontWeight="SemiBold" FontSize="10" Foreground="#FFFFFF"/>
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="30,3,0,0">
+                        <TextBlock Text="Hệ Phân Tán • PTIT HCM • " FontSize="11" Foreground="#94A3B8"/>
+                        <TextBlock Text="{Binding NodeId, StringFormat='Trạm: {0}'}" FontSize="11" FontWeight="SemiBold" Foreground="#38BDF8"/>
+                        <TextBlock Text="{Binding ListenEndpoint, StringFormat=' ({0})'}" FontSize="11" Foreground="#94A3B8"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Center: REAL WINDOWS SYSTEM CLOCK -->
+                <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" Padding="16,5">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="ĐỒNG HỒ WINDOWS THẬT (SetSystemTime)" FontSize="9" FontWeight="Bold" Foreground="#94A3B8" HorizontalAlignment="Center"/>
+                            <TextBlock Text="{Binding LocalTimeDisplay}" 
+                                       FontFamily="Consolas, Cascadia Code, Courier New" 
+                                       FontSize="26" FontWeight="Bold" Foreground="#F8FAFC" HorizontalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,1,0,0">
+                                <TextBlock Text="{Binding LocalUtcDisplay}" FontSize="10" Foreground="#38BDF8" Margin="0,0,8,0"/>
+                                <TextBlock Text="•" FontSize="10" Foreground="#64748B" Margin="0,0,8,0"/>
+                                <TextBlock Text="{Binding CurrentDateDisplay}" FontSize="10" Foreground="#94A3B8"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <!-- Admin Privilege Status Badge -->
+                    <TextBlock Text="{Binding AdminPermissionText}" 
+                               Foreground="{Binding AdminPermissionBrush}" 
+                               FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                </StackPanel>
+
+                <!-- Right: Action Toolbar -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Quick Drift Skew Buttons for Demo Skewing -->
+                    <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="6,4" Margin="0,0,10,0">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Chỉnh lệch để Demo:" FontSize="9" Foreground="#94A3B8" Margin="2,0,0,2"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="+2 Phút" Style="{StaticResource QuickDriftButton}" Command="{Binding QuickDriftCommand}" CommandParameter="2"/>
+                                <Button Content="-1 Phút" Style="{StaticResource QuickDriftButton}" Command="{Binding QuickDriftCommand}" CommandParameter="-1"/>
+                                <Button Content="-3 Phút" Style="{StaticResource QuickDriftButton}" Command="{Binding QuickDriftCommand}" CommandParameter="-3"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Crash Master Simulation Button (for Bully testing) -->
+                    <Button Content="💥 Giả Lập Crash (Bully)" 
+                            Style="{StaticResource CrashActionButton}" 
+                            Command="{Binding SimulateMasterCrashCommand}" 
+                            Margin="0,0,10,0" 
+                            ToolTip="Giả lập mất kết nối Master để kích hoạt bầu cử Bully (Lớn trị bé)"/>
+
+                    <!-- Trigger Sync Now Button (Berkeley main trigger) -->
+                    <Button Content="⚡ ĐỒNG BỘ NGAY" 
+                            Style="{StaticResource SyncActionButton}" 
+                            Command="{Binding TriggerSyncNowCommand}"
+                            IsEnabled="{Binding IsMaster}"
+                            ToolTip="{Binding SyncButtonTooltip}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- 2. NAVIGATION TABS BAR                                             -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="1" Background="#162032" BorderBrush="#334155" BorderThickness="0,0,0,1" Padding="18,0">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="📊 Bảng Điều Khiển (Dashboard)" Style="{StaticResource NavTabButton}"
+                        Foreground="{Binding SelectedTabIndex, Converter={StaticResource TabBrushConv}, ConverterParameter=0}"
+                        Background="{Binding SelectedTabIndex, Converter={StaticResource TabBgConv}, ConverterParameter=0}"
+                        Command="{Binding SelectTabCommand}" CommandParameter="0"/>
+
+                <Button Content="⚙️ Cấu Hình Mạng (LAN/Wi-Fi 6 Máy)" Style="{StaticResource NavTabButton}"
+                        Foreground="{Binding SelectedTabIndex, Converter={StaticResource TabBrushConv}, ConverterParameter=1}"
+                        Background="{Binding SelectedTabIndex, Converter={StaticResource TabBgConv}, ConverterParameter=1}"
+                        Command="{Binding SelectTabCommand}" CommandParameter="1"/>
+
+                <Button Content="📜 Lịch Sử Vòng Đồng Bộ (SQLite)" Style="{StaticResource NavTabButton}"
+                        Foreground="{Binding SelectedTabIndex, Converter={StaticResource TabBrushConv}, ConverterParameter=2}"
+                        Background="{Binding SelectedTabIndex, Converter={StaticResource TabBgConv}, ConverterParameter=2}"
+                        Command="{Binding SelectTabCommand}" CommandParameter="2"/>
+
+                <Button Content="💡 Nguyên Lý &amp; Công Thức RFC 5905" Style="{StaticResource NavTabButton}"
+                        Foreground="{Binding SelectedTabIndex, Converter={StaticResource TabBrushConv}, ConverterParameter=3}"
+                        Background="{Binding SelectedTabIndex, Converter={StaticResource TabBgConv}, ConverterParameter=3}"
+                        Command="{Binding SelectTabCommand}" CommandParameter="3"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- 3. MAIN CONTENT BODY (TABS)                                        -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <Grid Grid.Row="2">
+
+            <!-- ───────────────────────────────────────────────────────────── -->
+            <!-- TAB 0: DASHBOARD CHÍNH (3 CỘT)                                -->
+            <!-- ───────────────────────────────────────────────────────────── -->
+            <Grid Visibility="{Binding SelectedTabIndex, Converter={StaticResource EqualsToVis}, ConverterParameter=0}" Margin="18,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/> <!-- Notification Banner -->
+                    <RowDefinition Height="*"/>    <!-- 3-Column Layout -->
+                </Grid.RowDefinitions>
+
+                <!-- 🔔 Notification Banner Sau Vòng Đồng Bộ -->
+                <Border Grid.Row="0" Background="{Binding ResultBannerBrush}" BorderBrush="#34D399" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,10"
+                        Visibility="{Binding IsResultBannerVisible, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ResultBannerTitle}" FontWeight="Bold" FontSize="13" Foreground="#FFFFFF"/>
+                            <TextBlock Text="{Binding ResultBannerSummary}" FontSize="12" Foreground="#E2E8F0" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Center" Content="✕ Đóng" 
+                                Background="#0F172A" Foreground="#FFFFFF" BorderThickness="0" Padding="8,4" Cursor="Hand"
+                                Command="{Binding CloseResultBannerCommand}"/>
+                    </Grid>
+                </Border>
+
+                <!-- 3 CỘT DASHBOARD CHÍNH -->
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="340"/> <!-- Cột 1: Cụm 6 máy -->
+                        <ColumnDefinition Width="*"/>   <!-- Cột 2: Berkeley Stage -->
+                        <ColumnDefinition Width="390"/> <!-- Cột 3: Tracer Gói Tin -->
+                    </Grid.ColumnDefinitions>
+
+                    <!-- ───────────────────────────────────────────────────────── -->
+                    <!-- CỘT 1: BẢN ĐỒ CỤM 6 MÁY                                   -->
+                    <!-- ───────────────────────────────────────────────────────── -->
+                    <Grid Grid.Column="0" Margin="0,0,12,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Header Cột 1 -->
+                        <Grid Grid.Row="0" Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="🌐 BẢN ĐỒ CỤM 6 MÁY" FontSize="13" FontWeight="Bold" Foreground="#F8FAFC"/>
+                            </StackPanel>
+                            <TextBlock HorizontalAlignment="Right" Text="{Binding ConnectedNodesSummary}" FontSize="11" Foreground="#38BDF8" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- Danh sách Node Cards -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Peers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:NodeCardViewModel}">
+                                        <Border Style="{StaticResource CardStyle}" 
+                                                BorderBrush="{Binding StatusBrush}" 
+                                                BorderThickness="1.5" 
+                                                Margin="0,0,0,8" 
+                                                Padding="12,9">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Dòng 1: Tên máy + Trạng thái mạng + Role Badge -->
+                                                <Grid Grid.Row="0">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Ellipse Width="9" Height="9" Fill="{Binding ConnectionStateBrush}" Margin="0,0,6,0"/>
+                                                        <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="13" Foreground="#F8FAFC"/>
+                                                        <TextBlock Text="{Binding ConnectionStateText, StringFormat=' ({0})'}" FontSize="10" Foreground="{Binding ConnectionStateBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <Border HorizontalAlignment="Right" Background="{Binding BadgeBackground}" CornerRadius="8" Padding="7,2">
+                                                        <TextBlock Text="{Binding RoleBadge}" FontSize="9" FontWeight="Bold" Foreground="{Binding StatusBrush}"/>
+                                                    </Border>
+                                                </Grid>
+
+                                                <!-- Dòng 2: Endpoint IP:Port + Last Seen -->
+                                                <Grid Grid.Row="1" Margin="15,2,0,4">
+                                                    <TextBlock Text="{Binding AddressPort}" FontSize="10" Foreground="#64748B"/>
+                                                    <TextBlock HorizontalAlignment="Right" Text="{Binding LastSeenText, StringFormat='Gặp: {0}'}" FontSize="10" Foreground="#64748B"/>
+                                                </Grid>
+
+                                                <!-- Dòng 3: Đo lường RTT, Offset, Lượng chỉnh -->
+                                                <Border Grid.Row="2" Background="#0F172A" CornerRadius="6" Padding="6,4" Margin="0,2,0,4">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="Trễ RTT" FontSize="8" Foreground="#64748B"/>
+                                                            <TextBlock Text="{Binding LastRttText}" FontWeight="SemiBold" FontSize="11" Foreground="#38BDF8"/>
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="1">
+                                                            <TextBlock Text="Độ lệch (d)" FontSize="8" Foreground="#64748B"/>
+                                                            <TextBlock Text="{Binding LastOffsetText}" FontWeight="SemiBold" FontSize="11" Foreground="#F59E0B"/>
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="2">
+                                                            <TextBlock Text="Mức chỉnh" FontSize="8" Foreground="#64748B"/>
+                                                            <TextBlock Text="{Binding LastAdjustmentText}" FontWeight="SemiBold" FontSize="11" Foreground="#10B981"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Dòng 4: Trạng thái Step sau hiệu chỉnh -->
+                                                <TextBlock Grid.Row="3" Text="{Binding AdjustmentStatusText, StringFormat='Trạng thái: {0}'}" 
+                                                           Foreground="{Binding AdjustmentStatusBrush}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- ───────────────────────────────────────────────────────── -->
+                    <!-- CỘT 2: BERKELEY VISUAL STAGE                              -->
+                    <!-- ───────────────────────────────────────────────────────── -->
+                    <Grid Grid.Column="1" Margin="0,0,12,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> <!-- Stepper & Status Banner -->
+                            <RowDefinition Height="Auto"/> <!-- Metric Spread Gauges -->
+                            <RowDefinition Height="Auto"/> <!-- VÙNG KIỂM CHỨNG (VERIFICATION) -->
+                            <RowDefinition Height="*"/>    <!-- DataGrid 4 mốc RFC 5905 -->
+                            <RowDefinition Height="Auto"/> <!-- Ghi chú công thức -->
+                        </Grid.RowDefinitions>
+
+                        <!-- Bully Election Notification Banner -->
+                        <Border Grid.Row="0" Background="#581C87" BorderBrush="#A855F7" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,8"
+                                Visibility="{Binding IsElecting, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚡ THUẬT TOÁN BẦU CỬ BULLY ĐANG CHẠY" FontWeight="Bold" FontSize="12" Foreground="#F5D0FE"/>
+                                    <TextBlock Text=" (Lớn trị bé - Bầu Master mới)" FontSize="11" Foreground="#D8B4FE" Margin="4,0,0,0"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding ElectionStatusMessage}" FontSize="11" Foreground="#FFFFFF" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Stepper 4 bước vòng Berkeley -->
+                        <Border Grid.Row="0" Style="{StaticResource CardStyle}" Padding="14,10" Margin="0,0,0,8"
+                                Visibility="{Binding IsElecting, Converter={StaticResource InverseBoolToVis}}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="TIẾN TRÌNH VÒNG ĐỒNG BỘ: " FontWeight="Bold" FontSize="11" Foreground="#94A3B8"/>
+                                        <TextBlock Text="{Binding ActiveRoundId, StringFormat='Vòng {0}'}" FontWeight="Bold" FontSize="11" Foreground="#38BDF8"/>
+                                    </StackPanel>
+                                    <TextBlock HorizontalAlignment="Right" Text="{Binding RoundPhaseText}" FontWeight="SemiBold" FontSize="11" Foreground="#F59E0B"/>
+                                </Grid>
+
+                                <ProgressBar Grid.Row="1" Value="{Binding PhaseStepIndex}" Maximum="4" Height="6" Margin="0,8,0,0" Foreground="#F59E0B" Background="#0F172A" BorderThickness="0"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- 3 Metric Spread Gauges -->
+                        <Grid Grid.Row="1" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,0,6,0" Padding="12,8">
+                                <StackPanel>
+                                    <TextBlock Text="TRUNG BÌNH LỆCH (d_avg)" FontSize="9" FontWeight="Bold" Foreground="#94A3B8"/>
+                                    <TextBlock Text="{Binding AverageOffsetText}" FontSize="15" FontWeight="Bold" Foreground="#38BDF8" Margin="0,3,0,0"/>
+                                    <TextBlock Text="Mức tịnh tiến giờ chung" FontSize="9" Foreground="#64748B"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="0,0,6,0" Padding="12,8">
+                                <StackPanel>
+                                    <TextBlock Text="ĐỘ LỆCH TRƯỚC ĐỒNG BỘ" FontSize="9" FontWeight="Bold" Foreground="#94A3B8"/>
+                                    <TextBlock Text="{Binding PreSyncSpreadText}" FontSize="15" FontWeight="Bold" Foreground="#EF4444" Margin="0,3,0,0"/>
+                                    <TextBlock Text="Chênh lệch tối đa (E_before)" FontSize="9" Foreground="#64748B"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12,8">
+                                <StackPanel>
+                                    <TextBlock Text="HỘI TỤ SAU ĐỒNG BỘ" FontSize="9" FontWeight="Bold" Foreground="#94A3B8"/>
+                                    <TextBlock Text="{Binding PostSyncSpreadText}" FontSize="15" FontWeight="Bold" Foreground="#10B981" Margin="0,3,0,0"/>
+                                    <TextBlock Text="{Binding LastRoundOutcomeText}" FontSize="9" FontWeight="SemiBold" Foreground="{Binding OutcomeBrush}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- 🛡️ VÙNG KIỂM CHỨNG NGHIỆM THU (VERIFICATION VERDICT) -->
+                        <Border Grid.Row="2" Background="#162032" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" Padding="12,7" Margin="0,0,0,8">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="🎯 KẾT QUẢ ĐO KIỂM CHỨNG: " FontSize="11" FontWeight="Bold" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding VerificationVerdictText}" FontSize="12" FontWeight="Bold" Foreground="{Binding VerificationVerdictBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock HorizontalAlignment="Right" Text="{Binding AcceptanceThresholdText}" FontSize="10" Foreground="#64748B" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Bảng Mẫu Đo 4 Mốc RFC 5905 & Berkeley -->
+                        <Border Grid.Row="3" Style="{StaticResource CardStyle}" Padding="10">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="📊 BẢNG MẪU ĐO 4 MỐC THỜI GIAN THEO RFC 5905 &amp; KẾT QUẢ STEP" FontSize="11" FontWeight="Bold" Foreground="#F8FAFC"/>
+                                </StackPanel>
+
+                                <DataGrid Grid.Row="1" 
+                                          ItemsSource="{Binding CurrentRoundSamples}" 
+                                          AutoGenerateColumns="False" 
+                                          CanUserAddRows="False" 
+                                          IsReadOnly="True"
+                                          Background="Transparent"
+                                          RowBackground="#1E293B"
+                                          AlternatingRowBackground="#162032"
+                                          BorderThickness="0"
+                                          HeadersVisibility="Column"
+                                          GridLinesVisibility="Horizontal"
+                                          HorizontalGridLinesBrush="#334155"
+                                          Foreground="#F8FAFC"
+                                          FontSize="10">
+
+                                    <DataGrid.ColumnHeaderStyle>
+                                        <Style TargetType="DataGridColumnHeader">
+                                            <Setter Property="Background" Value="#0F172A"/>
+                                            <Setter Property="Foreground" Value="#94A3B8"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                            <Setter Property="Padding" Value="6,4"/>
+                                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                            <Setter Property="BorderBrush" Value="#334155"/>
+                                        </Style>
+                                    </DataGrid.ColumnHeaderStyle>
+
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Node ID" Binding="{Binding NodeId}" FontWeight="Bold" Width="65"/>
+                                        <DataGridTextColumn Header="t1 (M Gửi)" Binding="{Binding T1}" Width="85"/>
+                                        <DataGridTextColumn Header="t2 (W Nhận)" Binding="{Binding T2}" Width="85"/>
+                                        <DataGridTextColumn Header="t3 (W Gửi)" Binding="{Binding T3}" Width="85"/>
+                                        <DataGridTextColumn Header="t4 (M Nhận)" Binding="{Binding T4}" Width="85"/>
+                                        <DataGridTextColumn Header="RTT (r_i)" Binding="{Binding RttText}" Width="65"/>
+                                        <DataGridTextColumn Header="Offset (d_i)" Binding="{Binding OffsetText}" FontWeight="SemiBold" Width="75"/>
+                                        <DataGridTextColumn Header="Lệnh Step (a_i)" Binding="{Binding AdjustmentText}" FontWeight="Bold" Width="85"/>
+                                        <DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="90"/>
+                                        <DataGridTextColumn Header="Kết quả Step" Binding="{Binding StepResultText}" Width="95"/>
+                                        <DataGridTextColumn Header="Ghi chú" Binding="{Binding Note}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Grid>
+                        </Border>
+
+                        <!-- Ghi chú công thức RFC 5905 -->
+                        <Border Grid.Row="4" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,6,0,0">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="📐 Công thức RFC 5905: " FontSize="9" FontWeight="Bold" Foreground="#94A3B8"/>
+                                <TextBlock Text="d_i = ((t2 - t1) + (t3 - t4)) / 2" FontSize="9" Foreground="#38BDF8" Margin="0,0,12,0"/>
+                                <TextBlock Text="RTT = (t4 - t1) - (t3 - t2)" FontSize="9" Foreground="#38BDF8" Margin="0,0,12,0"/>
+                                <TextBlock Text="Hiệu chỉnh: a_i = d_avg - d_i" FontSize="9" Foreground="#10B981"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- ───────────────────────────────────────────────────────── -->
+                    <!-- CỘT 3: TRACER GÓI TIN & AUDIT LOG TCP                     -->
+                    <!-- ───────────────────────────────────────────────────────── -->
+                    <Grid Grid.Column="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> <!-- Filter Pills & Action Buttons -->
+                            <RowDefinition Height="Auto"/> <!-- Search Box -->
+                            <RowDefinition Height="*"/>    <!-- Log List -->
+                        </Grid.RowDefinitions>
+
+                        <!-- Header + Nút Lọc + Action -->
+                        <Grid Grid.Row="0" Margin="0,0,0,6">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="📡 TRACER GÓI TIN &amp; AUDIT" FontSize="13" FontWeight="Bold" Foreground="#F8FAFC"/>
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                <Button Content="Xuất CSV" Style="{StaticResource OutlineButton}" Command="{Binding ExportAuditLogCommand}" Margin="0,0,4,0"/>
+                                <Button Content="Xóa log" Style="{StaticResource OutlineButton}" Command="{Binding ClearLogsCommand}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Filter Pills & Search Box -->
+                        <Grid Grid.Row="1" Margin="0,0,0,6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Filter Pills -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
+                                <Button Content="Tất cả" Style="{StaticResource QuickDriftButton}" Command="{Binding SetLogFilterCommand}" CommandParameter="Tất cả"/>
+                                <Button Content="Gửi ➡️" Style="{StaticResource QuickDriftButton}" Command="{Binding SetLogFilterCommand}" CommandParameter="GỬI"/>
+                                <Button Content="Nhận ⬅️" Style="{StaticResource QuickDriftButton}" Command="{Binding SetLogFilterCommand}" CommandParameter="NHẬN"/>
+                                <Button Content="Step ⚡" Style="{StaticResource QuickDriftButton}" Command="{Binding SetLogFilterCommand}" CommandParameter="STEP"/>
+                                <Button Content="Bully 👑" Style="{StaticResource QuickDriftButton}" Command="{Binding SetLogFilterCommand}" CommandParameter="BULLY"/>
+                                <Button Content="Lỗi ⚠️" Style="{StaticResource QuickDriftButton}" Command="{Binding SetLogFilterCommand}" CommandParameter="LỖI"/>
+                            </StackPanel>
+
+                            <!-- Search Box -->
+                            <TextBox Grid.Row="1" Style="{StaticResource DarkTextBox}" Text="{Binding LogSearchKeyword, UpdateSourceTrigger=PropertyChanged}" 
+                                     ToolTip="Nhập từ khóa để tìm kiếm nhanh trong log..." Margin="0,2,0,0"/>
+                        </Grid>
+
+                        <!-- Danh sách Log hiển thị thời gian thực -->
+                        <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding AuditLogs}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:LogItemViewModel}">
+                                            <Border BorderBrush="#334155" BorderThickness="0,0,0,1" Padding="3,5">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="65"/>  <!-- Time -->
+                                                        <ColumnDefinition Width="65"/>  <!-- Badge -->
+                                                        <ColumnDefinition Width="*"/>   <!-- Summary -->
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Grid.Column="0" Text="{Binding TimeString}" 
+                                                               FontFamily="Consolas" FontSize="10" Foreground="#64748B" VerticalAlignment="Top"/>
+
+                                                    <Border Grid.Column="1" HorizontalAlignment="Left" CornerRadius="4" Padding="4,1" Margin="2,0" Background="#0F172A">
+                                                        <TextBlock Text="{Binding DirectionBadge}" 
+                                                                   FontSize="9" FontWeight="Bold" Foreground="{Binding BadgeBrush}"/>
+                                                    </Border>
+
+                                                    <TextBlock Grid.Column="2" Text="{Binding Summary}" 
+                                                               FontSize="10.5" Foreground="#F8FAFC" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Grid>
+
+            <!-- ───────────────────────────────────────────────────────────── -->
+            <!-- TAB 1: CẤU HÌNH MẠNG & THÔNG SỐ NODE (CHO 6 MÁY LAPTOP THẬT)  -->
+            <!-- ───────────────────────────────────────────────────────────── -->
+            <Grid Visibility="{Binding SelectedTabIndex, Converter={StaticResource EqualsToVis}, ConverterParameter=1}" Margin="30,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="⚙️ THIẾT LẬP CẤU HÌNH MẠNG &amp; THÔNG SỐ VẬN HÀNH (LAN / WI-FI 6 MÁY)" 
+                           FontSize="16" FontWeight="Bold" Foreground="#F8FAFC" Margin="0,0,0,14"/>
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="420"/> <!-- Thông tin máy này & Vận hành -->
+                        <ColumnDefinition Width="*"/>   <!-- Danh sách Peers -->
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Khối bên trái: Thông tin máy & Tham số -->
+                    <StackPanel Grid.Column="0" Margin="0,0,20,0">
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="1. THÔNG TIN MÁY NÀY (LOCAL NODE)" FontWeight="Bold" FontSize="13" Foreground="#38BDF8" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Node ID (Định danh máy, ví dụ: Node1, Node2...):" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,3"/>
+                                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ConfigNodeId}" Margin="0,0,0,8"/>
+
+                                <TextBlock Text="Tên hiển thị trạm:" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,3"/>
+                                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ConfigDisplayName}" Margin="0,0,0,8"/>
+
+                                <TextBlock Text="Địa chỉ IP lắng nghe (Wi-Fi/LAN của máy này):" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,3"/>
+                                <ComboBox Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155" Padding="6,4" Margin="0,0,0,8"
+                                          ItemsSource="{Binding AvailableIpAddresses}" SelectedItem="{Binding ConfigListenAddress}"/>
+
+                                <TextBlock Text="Cổng TCP Lắng nghe:" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,3"/>
+                                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ConfigListenPort}" Margin="0,0,0,8"/>
+
+                                <!-- Toggle Chế độ Mạng Thật vs Giả lập -->
+                                <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,4,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Chế độ hoạt động:" FontSize="11" FontWeight="Bold" Foreground="#F8FAFC"/>
+                                        <CheckBox Content="🧪 Sử dụng Giả lập Cụm (Chạy thử 1 máy không cần mạng)" 
+                                                  IsChecked="{Binding ConfigUseSimulatedCluster}" 
+                                                  Foreground="#F59E0B" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                                        <TextBlock Text="* Bỏ chọn để chạy Socket TCP THẬT giữa 6 laptop qua Wi-Fi/LAN" FontSize="10" Foreground="#64748B" Margin="20,2,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="2. THAM SỐ VẬN HÀNH &amp; NGHIỆM THU" FontWeight="Bold" FontSize="13" Foreground="#F59E0B" Margin="0,0,0,10"/>
+
+                                <Grid Margin="0,0,0,6">
+                                    <TextBlock Text="Ngưỡng sai số nghiệm thu (giây):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigAcceptanceThresholdSeconds}"/>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,6">
+                                    <TextBlock Text="Heartbeat Interval (ms):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigHeartbeatIntervalMs}"/>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,6">
+                                    <TextBlock Text="Heartbeat Timeout (ms):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigHeartbeatTimeoutMs}"/>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,6">
+                                    <TextBlock Text="Bully Election Timeout (ms):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigElectionTimeoutMs}"/>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,6">
+                                    <TextBlock Text="Sample Round Timeout (ms):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigRoundTimeoutMs}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Khối bên phải: Danh sách Peers -->
+                    <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Margin="0,0,0,10">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="3. DANH SÁCH CÁC PEERS (CÁC MÁY CÒN LẠI TRONG CỤM)" FontWeight="Bold" FontSize="13" Foreground="#10B981"/>
+                                </StackPanel>
+                                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                    <Button Content="📋 Nạp mẫu 6 Laptop (192.168.1.10x)" Style="{StaticResource OutlineButton}" Command="{Binding Reset6LaptopConfigCommand}" Margin="0,0,8,0"/>
+                                    <Button Content="➕ Thêm Máy" Style="{StaticResource OutlineButton}" Command="{Binding AddConfigPeerCommand}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding ConfigPeers}"
+                                      AutoGenerateColumns="False" CanUserAddRows="False"
+                                      Background="#0F172A" BorderBrush="#334155" BorderThickness="1"
+                                      HeadersVisibility="Column" Foreground="#F8FAFC" FontSize="12">
+                                <DataGrid.ColumnHeaderStyle>
+                                    <Style TargetType="DataGridColumnHeader">
+                                        <Setter Property="Background" Value="#1E293B"/>
+                                        <Setter Property="Foreground" Value="#94A3B8"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                        <Setter Property="Padding" Value="8,6"/>
+                                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                        <Setter Property="BorderBrush" Value="#334155"/>
+                                    </Style>
+                                </DataGrid.ColumnHeaderStyle>
+
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Node ID" Binding="{Binding NodeId, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
+                                    <DataGridTextColumn Header="Địa chỉ IP (LAN/Wi-Fi)" Binding="{Binding Address, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
+                                    <DataGridTextColumn Header="Cổng TCP" Binding="{Binding Port, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                                    <DataGridTemplateColumn Header="Thao tác" Width="100">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Button Content="🗑️ Xóa" Background="#7F1D1D" Foreground="#FCA5A5" BorderThickness="0" Padding="6,2" Cursor="Hand"
+                                                        Command="{Binding DataContext.RemoveConfigPeerCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                        CommandParameter="{Binding}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <TextBlock Grid.Row="2" Text="* Khi triển khai trên 6 máy laptop thực tế, mỗi máy chỉ cần nhập Node ID của mình và IP tương ứng của các máy còn lại." 
+                                       FontSize="11" Foreground="#64748B" Margin="0,8,0,0"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- Footer nút Lưu & Áp Dụng -->
+                <Border Grid.Row="2" Margin="0,14,0,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="💾 LƯU CẤU HÌNH &amp; KHỞI ĐỘNG LẠI NODE" 
+                                Style="{StaticResource SyncActionButton}" 
+                                Command="{Binding SaveConfigAndRestartCommand}" 
+                                Padding="20,10"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ───────────────────────────────────────────────────────────── -->
+            <!-- TAB 2: LỊCH SỬ VÒNG ĐỒNG BỘ (SQLITE)                          -->
+            <!-- ───────────────────────────────────────────────────────────── -->
+            <Grid Visibility="{Binding SelectedTabIndex, Converter={StaticResource EqualsToVis}, ConverterParameter=2}" Margin="30,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,12">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="📜 LỊCH SỬ CÁC VÒNG ĐỒNG BỘ ĐÃ LƯU TRONG SQLITE (berkeley_audit.db)" 
+                                   FontSize="15" FontWeight="Bold" Foreground="#F8FAFC"/>
+                    </StackPanel>
+                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                        <Button Content="🔄 Làm mới" Style="{StaticResource OutlineButton}" Command="{Binding RefreshHistoryCommand}" Margin="0,0,8,0"/>
+                        <Button Content="📊 Xuất Báo Cáo CSV" Style="{StaticResource OutlineButton}" Command="{Binding ExportHistoryCsvCommand}"/>
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}">
+                    <DataGrid ItemsSource="{Binding RecentRounds}"
+                              AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                              Background="Transparent" BorderThickness="0"
+                              RowBackground="#1E293B" AlternatingRowBackground="#162032"
+                              HeadersVisibility="Column" Foreground="#F8FAFC" FontSize="11">
+                        <DataGrid.ColumnHeaderStyle>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="#0F172A"/>
+                                <Setter Property="Foreground" Value="#94A3B8"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="Padding" Value="8,6"/>
+                                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                <Setter Property="BorderBrush" Value="#334155"/>
+                            </Style>
+                        </DataGrid.ColumnHeaderStyle>
+
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Mã Vòng" Binding="{Binding RoundId}" FontWeight="Bold" Width="80"/>
+                            <DataGridTextColumn Header="Máy Master" Binding="{Binding MasterNodeId}" Width="85"/>
+                            <DataGridTextColumn Header="Phiên Leader" Binding="{Binding LeaderSessionId, StringFormat='#{0}'}" Width="85"/>
+                            <DataGridTextColumn Header="Bắt đầu" Binding="{Binding StartedAt, StringFormat='{}{0:HH:mm:ss dd/MM}'}" Width="110"/>
+                            <DataGridTextColumn Header="Kết thúc" Binding="{Binding EndedAt, StringFormat='{}{0:HH:mm:ss dd/MM}'}" Width="110"/>
+                            <DataGridTextColumn Header="Lệch TB (d_avg)" Binding="{Binding AverageOffsetMs, StringFormat='{}{0:+0.0;-0.0} ms'}" FontWeight="SemiBold" Width="110"/>
+                            <DataGridTextColumn Header="Sai số đo lại" Binding="{Binding RemeasuredSpreadMs, StringFormat='{}{0:F1} ms'}" FontWeight="Bold" Width="100"/>
+                            <DataGridTextColumn Header="Chấp nhận" Binding="{Binding AcceptedCount, StringFormat='{}{0} máy'}" Width="80"/>
+                            <DataGridTextColumn Header="Bị loại" Binding="{Binding RejectedCount, StringFormat='{}{0} máy'}" Width="75"/>
+                            <DataGridTextColumn Header="Kết quả" Binding="{Binding Outcome}" FontWeight="Bold" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Border>
+            </Grid>
+
+            <!-- ───────────────────────────────────────────────────────────── -->
+            <!-- TAB 3: NGUYÊN LÝ & CÔNG THỨC THUẬT TOÁN (RFC 5905 & BULLY)    -->
+            <!-- ───────────────────────────────────────────────────────────── -->
+            <ScrollViewer Visibility="{Binding SelectedTabIndex, Converter={StaticResource EqualsToVis}, ConverterParameter=3}" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="40,24" MaxWidth="1100" HorizontalAlignment="Left">
+                    <TextBlock Text="💡 NGUYÊN LÝ THUẬT TOÁN &amp; CÔNG THỨC NGHIỆM THU ĐỒ ÁN" FontSize="18" FontWeight="Bold" Foreground="#38BDF8" Margin="0,0,0,16"/>
+
+                    <!-- Khối 1: Thuật toán Berkeley -->
+                    <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="1. THUẬT TOÁN ĐỒNG BỘ ĐỒNG HỒ BERKELEY &amp; ĐO 4 MỐC RFC 5905" FontSize="14" FontWeight="Bold" Foreground="#F59E0B" Margin="0,0,0,10"/>
+                            <TextBlock Text="Thuật toán Berkeley là giải thuật đồng bộ đồng hồ nội bộ trong hệ phân tán. Máy điều phối (Master) định kỳ thu thập thời gian của các máy trạm (Worker), ước lượng độ lệch có tính đến độ trễ mạng khứ hồi RTT, sau đó tính thời gian trung bình chung và gửi lượng hiệu chỉnh (Step) cho từng máy." 
+                                       FontSize="12" Foreground="#E2E8F0" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                            <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="14" Margin="0,0,0,10">
+                                <StackPanel>
+                                    <TextBlock Text="📌 4 Mốc Thời Gian Đo Offset Hai Chiều (RFC 5905):" FontWeight="Bold" FontSize="12" Foreground="#38BDF8" Margin="0,0,0,6"/>
+                                    <TextBlock Text="• t1: Thời điểm Master gửi gói tin TIME_REQUEST (theo giờ Master)" FontSize="11" Foreground="#94A3B8"/>
+                                    <TextBlock Text="• t2: Thời điểm Worker nhận được gói tin TIME_REQUEST (theo giờ Worker)" FontSize="11" Foreground="#94A3B8"/>
+                                    <TextBlock Text="• t3: Thời điểm Worker gửi lại gói tin TIME_RESPONSE (theo giờ Worker)" FontSize="11" Foreground="#94A3B8"/>
+                                    <TextBlock Text="• t4: Thời điểm Master nhận được phản hồi TIME_RESPONSE (theo giờ Master)" FontSize="11" Foreground="#94A3B8"/>
+
+                                    <Separator Background="#334155" Margin="0,8"/>
+
+                                    <TextBlock Text="📐 Công Thức Tính Toán:" FontWeight="Bold" FontSize="12" Foreground="#10B981" Margin="0,0,0,6"/>
+                                    <TextBlock Text="• Ước lượng độ lệch:  d_i = ((t2 − t1) + (t3 − t4)) / 2  (d_i > 0: Worker nhanh hơn Master)" FontSize="11" Foreground="#F8FAFC" FontFamily="Consolas"/>
+                                    <TextBlock Text="• Ước lượng trễ RTT:  r_i = (t4 − t1) − (t3 − t2)" FontSize="11" Foreground="#F8FAFC" FontFamily="Consolas"/>
+                                    <TextBlock Text="• Trung bình toàn cụm: d_avg = (Σ d_i) / |S|  (Master tự tính với d_M = 0)" FontSize="11" Foreground="#F8FAFC" FontFamily="Consolas"/>
+                                    <TextBlock Text="• Lượng hiệu chỉnh:   a_i = d_avg − d_i  (Master tự áp dụng a_M = d_avg)" FontSize="11" Foreground="#F8FAFC" FontFamily="Consolas"/>
+                                    <TextBlock Text="• Áp dụng Step:        Clock_new = Clock_current + a_i (thay đổi đồng hồ hệ điều hành Windows)" FontSize="11" Foreground="#F8FAFC" FontFamily="Consolas"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Khối 2: Thuật toán Bully -->
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="2. THUẬT TOÁN BẦU CỬ LÃNH ĐẠO BULLY (LỚN TRỊ BÉ)" FontSize="14" FontWeight="Bold" Foreground="#A855F7" Margin="0,0,0,10"/>
+                            <TextBlock Text="Khi máy Master hiện tại gặp sự cố (bị tắt, crash hoặc timeout heartbeat), các Worker còn lại sẽ phối hợp để bầu ra một Master mới thay thế thông qua thuật toán Bully:" 
+                                       FontSize="12" Foreground="#E2E8F0" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                            <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="14">
+                                <StackPanel>
+                                    <TextBlock Text="1. Phát hiện sự cố: Worker không nhận được heartbeat từ Master sau thời gian HeartbeatTimeout." FontSize="11" Foreground="#94A3B8" Margin="0,0,0,4"/>
+                                    <TextBlock Text="2. Gửi ELECTION: Node phát hiện sự cố gửi thông điệp ELECTION tới tất cả các Node có Node ID cao hơn." FontSize="11" Foreground="#94A3B8" Margin="0,0,0,4"/>
+                                    <TextBlock Text="3. Phản hồi OK: Nếu có Node ID cao hơn còn sống, nó sẽ phản hồi OK và tự khởi xướng bầu cử tiếp." FontSize="11" Foreground="#94A3B8" Margin="0,0,0,4"/>
+                                    <TextBlock Text="4. Tuyên bố COORDINATOR: Nếu một Node không nhận được phản hồi OK từ bất kỳ ai cao hơn mình, nó tự tuyên bố thắng cử và gửi broadcast thông điệp COORDINATOR tới toàn cụm." FontSize="11" Foreground="#94A3B8" Margin="0,0,0,4"/>
+                                    <TextBlock Text="5. Mở phiên mới: Master mới tăng LeaderSessionId, hủy vòng đo cũ và sẵn sàng điều phối vòng mới." FontSize="11" Foreground="#94A3B8"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <!-- 4. BOTTOM STATUS BAR FOOTER                                        -->
+        <!-- ═══════════════════════════════════════════════════════════════════ -->
+        <Border Grid.Row="3" Background="#0F172A" BorderBrush="#334155" BorderThickness="0,1,0,0" Padding="18,7">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="💾 CSDL:" FontSize="10.5" Foreground="#64748B"/>
+                    <TextBlock Text=" SQLite (berkeley_audit.db) Sẵn sàng" FontSize="10.5" FontWeight="SemiBold" Foreground="#10B981" Margin="3,0,14,0"/>
+
+                    <TextBlock Text="🌐 Mạng:" FontSize="10.5" Foreground="#64748B"/>
+                    <TextBlock Text="{Binding ConnectedNodesSummary, StringFormat=' {0}'}" FontSize="10.5" FontWeight="SemiBold" Foreground="#38BDF8" Margin="3,0,14,0"/>
+
+                    <TextBlock Text="👑 Master hiện tại:" FontSize="10.5" Foreground="#64748B"/>
+                    <TextBlock Text="{Binding CurrentMasterId}" FontSize="10.5" FontWeight="Bold" Foreground="#F59E0B" Margin="3,0,3,0"/>
+                    <TextBlock Text="{Binding LeaderSessionId, StringFormat='(Phiên #{0})'}" FontSize="10.5" Foreground="#94A3B8"/>
+                </StackPanel>
+
+                <TextBlock HorizontalAlignment="Right" Text="Đồ án Hệ Thống Phân Tán • PTIT HCM • .NET 10 LTS • WPF MVVM" FontSize="10" Foreground="#64748B" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>
-
