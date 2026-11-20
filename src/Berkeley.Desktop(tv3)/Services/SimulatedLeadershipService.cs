@@ -45,7 +45,7 @@ public sealed class SimulatedLeadershipService : ILeadershipService
     /// <summary>
     /// Giả lập kịch bản Master bị Crash -> Kích hoạt bầu cử Bully (Lớn trị bé)
     /// </summary>
-    public async Task TriggerBullyElectionSimulationAsync(Action<string> stepReporter)
+    public async Task TriggerBullyElectionSimulationAsync(Action<string> stepReporter, CancellationToken ct = default)
     {
         long newSessionId = (_currentLeader?.LeaderSessionId ?? 0) + 1;
         string oldMaster = _currentLeader?.MasterNodeId ?? "Node1";
@@ -55,19 +55,19 @@ public sealed class SimulatedLeadershipService : ILeadershipService
             _currentNodeId, AuditEventKind.LeaderChanged,
             $"Heartbeat timeout từ Master {oldMaster}. Bắt đầu thuật toán Bully..."));
 
-        await Task.Delay(1000);
+        await Task.Delay(1000, ct);
 
         stepReporter("Node2 phát hiện và gửi thông điệp [ELECTION] tới các Node có ID cao hơn (Node3..Node6)");
-        await Task.Delay(1200);
+        await Task.Delay(1200, ct);
 
         stepReporter("Node3, Node4, Node5, Node6 trả lời [OK] - Node có ID cao hơn tiếp tục tranh cử");
-        await Task.Delay(1200);
+        await Task.Delay(1200, ct);
 
         stepReporter("Node6 (ID cao nhất cụm còn sống) không nhận được phản hồi từ ai cao hơn");
-        await Task.Delay(1000);
+        await Task.Delay(1000, ct);
 
         stepReporter($"👑 Node6 gửi BROADCAST [COORDINATOR]! Tuyên bố trở thành MASTER mới (Phiên #{newSessionId})");
-        await Task.Delay(800);
+        await Task.Delay(800, ct);
 
         SetLeader("Node6", newSessionId);
     }

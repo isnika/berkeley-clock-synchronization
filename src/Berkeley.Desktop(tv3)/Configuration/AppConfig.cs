@@ -103,7 +103,7 @@ public sealed class AppConfig
     /// </summary>
     public static List<string> GetLocalIPv4Addresses()
     {
-        var list = new List<string> { "0.0.0.0 (Mọi card mạng)", "127.0.0.1 (Localhost)" };
+        var list = new List<string> { "0.0.0.0", "127.0.0.1" };
         try
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());

@@ -94,6 +94,8 @@ public partial class NodeCardViewModel : ObservableObject
     /// </summary>
     public void UpdateFromPeerStatus(PeerStatus peer, string? currentMasterId, string currentNodeId)
     {
+        LastRttText = LastOffsetText = LastAdjustmentText = "--";
+        LastSeenText = "Chưa có mẫu";
         DisplayName = peer.DisplayName;
         ConnectionState = peer.ConnectionState;
 
@@ -109,7 +111,7 @@ public partial class NodeCardViewModel : ObservableObject
         }
         else
         {
-            ConnectionStateText = "OFFLINE";
+            ConnectionStateText = peer.ConnectionState == PeerConnectionState.Unknown ? "CHƯA XÁC ĐỊNH" : "OFFLINE";
             ConnectionStateBrush = (Brush)new BrushConverter().ConvertFrom("#EF4444")!; // Red
         }
 

@@ -42,6 +42,7 @@ public partial class LogItemViewModel : ObservableObject
             AuditEventKind.PeerConnected => ("🟢 KẾT NỐI", (Brush)new BrushConverter().ConvertFrom("#10B981")!, "MẠNG"),
             AuditEventKind.PeerDisconnected => ("🔴 NGẮT KẾT NỐI", (Brush)new BrushConverter().ConvertFrom("#EF4444")!, "MẠNG"),
             AuditEventKind.SendError => ("❌ LỖI GỬI", (Brush)new BrushConverter().ConvertFrom("#EF4444")!, "LỖI"),
+            AuditEventKind.MessageRejected => ("TỪ CHỐI", Brushes.OrangeRed, "LỖI"),
             _ => ("ℹ️ INFO", (Brush)new BrushConverter().ConvertFrom("#64748B")!, "Khác")
         };
 

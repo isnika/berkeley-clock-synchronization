@@ -3,6 +3,10 @@
 Ứng dụng Windows đồng bộ đồng hồ mạng nội bộ bằng thuật toán Berkeley.  
 Môn: Các Hệ Thống Phân Tán | Nhóm 6 thành viên | .NET 10 LTS + WPF + TCP + SQLite
 
+Context và tiến độ đã đối chiếu với mã nguồn, theo vai trò TV3: [Bản cập nhật 20/11/2026](docs/context-va-tien-do.md).
+
+Phân tích lỗi, đề xuất cập nhật và tiêu chí kiểm tra phần TV3: [Kế hoạch hoàn thiện TV3](docs/ke-hoach-hoan-thien-tv3.md).
+
 ---
 
 ## Cấu trúc dự án
@@ -44,3 +48,5 @@ dotnet test tests/Berkeley.Engine.Tests/
 | Berkeley.Contracts + Berkeley.Engine | TV1 | Thuật toán Berkeley, Windows Clock, điều phối vòng |
 | Berkeley.Networking | TV2 | TCP, Bully, heartbeat, membership |
 | Berkeley.Desktop | TV3 | WPF GUI, SQLite, cấu hình, đóng gói |
+
+Hướng dẫn bản Desktop cập nhật: [Chạy và kiểm chứng TV3](docs/huong-dan-tv3.md). [Kết quả sửa, test và giới hạn](docs/ket-qua-sua-tv3.md).

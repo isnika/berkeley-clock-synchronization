@@ -7,7 +7,7 @@ using Berkeley.Contracts;
 using Berkeley.Desktop.Configuration;
 using Berkeley.Desktop.Persistence;
 using Berkeley.Desktop.Services;
-using Berkeley.Desktop.Services.RealNetwork;
+using Berkeley.Networking;
 using Berkeley.Engine.Clocks;
 using Berkeley.Engine.Runtime;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -21,7 +21,20 @@ public partial class MainViewModel : ObservableObject
     private readonly DispatcherTimer _clockTimer;
     private AppConfig _config;
     private readonly SqliteAuditSink _auditSink;
-    private readonly ISystemClock _clock;
+    private ISystemClock _clock;
+    private CancellationTokenSource? _runCts;
+    private Task? _syncTask;
+    private Task? _electionTask;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveConfigAndRestartCommand))]
+    private bool _hasInputErrors;
+    private bool CanSaveConfig() => !HasInputErrors;
+    private bool _closed;
+    private bool _running;
+    private int _snapshotTicks;
+    private bool _stopping;
+    private Task? _stopTask;
+    private int _generation;
 
     // Services có thể tái khởi tạo khi đổi chế độ Giả lập / Mạng thật
     private INodeApplication? _nodeApp;
@@ -106,11 +119,15 @@ public partial class MainViewModel : ObservableObject
     public ObservableCollection<string> AvailableIpAddresses { get; } = [];
     public ObservableCollection<ConfigPeerItem> ConfigPeers { get; } = [];
 
-    public MainViewModel()
+    public MainViewModel() : this(AppConfigManager.Load(), new SqliteAuditSink()) { }
+
+    public MainViewModel(AppConfig config, SqliteAuditSink auditSink)
     {
-        _config = AppConfigManager.Load();
-        _auditSink = new SqliteAuditSink();
-        _clock = new WindowsClock();
+        _config = config;
+        _auditSink = auditSink;
+        _clock = new DesktopClock(_config.UseSimulatedCluster);
+        _auditSink.AuditEventLogged += OnAuditEventLogged;
+        _auditSink.StorageFailed += message => Application.Current?.Dispatcher.BeginInvoke(new Action(() => { VerificationVerdictText = "Lỗi lưu trữ: " + message; }));
 
         CheckAdminPermissions();
 
@@ -124,7 +141,8 @@ public partial class MainViewModel : ObservableObject
         LoadConfigFields();
 
         // Khởi động hệ thống mạng & Node
-        InitializeNodeApplication();
+        if (_config.AutoStartOnLaunch) InitializeNodeApplication();
+        else { IsMaster = false; RoleBadge = "ĐÃ DỪNG"; }
 
         // Đồng hồ tick 50ms cập nhật UI
         _clockTimer = new DispatcherTimer(DispatcherPriority.Render)
@@ -141,9 +159,10 @@ public partial class MainViewModel : ObservableObject
     private void CheckAdminPermissions()
     {
         HasAdminPermission = _clock.HasSetTimePermission();
+        if (_config.UseSimulatedCluster) { AdminPermissionText = "Đồng hồ mô phỏng — không chỉnh giờ Windows"; return; }
         if (HasAdminPermission)
         {
-            AdminPermissionText = "🛡️ Administrator: Quyền SetSystemTime ĐẦY ĐỦ";
+            AdminPermissionText = "🛡️ Administrator: Token có quyền chỉnh giờ (kết quả thực tế theo từng Step)";
             AdminPermissionBrush = (Brush)new BrushConverter().ConvertFrom("#10B981")!;
         }
         else
@@ -167,7 +186,7 @@ public partial class MainViewModel : ObservableObject
         ConfigSampleTimeoutMs = _config.Node.OperationParams.SampleTimeoutMs;
         ConfigRoundTimeoutMs = _config.Node.OperationParams.RoundTimeoutMs;
 
-        AcceptanceThresholdText = $"Ngưỡng nghiệm thu: < {_config.AcceptanceThresholdSeconds:F1}s";
+        AcceptanceThresholdText = $"Ngưỡng cấu hình: ≤ {_config.AcceptanceThresholdSeconds:F1}s";
 
         ConfigPeers.Clear();
         foreach (var p in _config.Node.Peers)
@@ -178,6 +197,11 @@ public partial class MainViewModel : ObservableObject
 
     private void InitializeNodeApplication()
     {
+        ConfigValidator.Validate(_config);
+        _clock = new DesktopClock(_config.UseSimulatedCluster);
+        _generation++;
+        _runCts = new CancellationTokenSource();
+        CheckAdminPermissions();
         NodeId = _config.Node.NodeId;
         DisplayName = _config.Node.DisplayName;
         ListenEndpoint = $"{_config.Node.ListenAddress}:{_config.Node.ListenPort}";
@@ -187,9 +211,10 @@ public partial class MainViewModel : ObservableObject
             NetworkModeBadge = "🧪 CHẾ ĐỘ GIẢ LẬP (1 MÁY)";
             NetworkModeBrush = (Brush)new BrushConverter().ConvertFrom("#A855F7")!;
 
-            var simTransport = new SimulatedClusterTransport((IClockReader)_clock, _auditSink);
+            var simTransport = new SimulatedClusterTransport((IClockReader)_clock, _auditSink, _config.Node);
             _simLeadership = new SimulatedLeadershipService(NodeId, (IClockReader)_clock, _auditSink);
 
+            _simLeadership.SetLeader(NodeId, 1);
             _transport = simTransport;
             _leadership = _simLeadership;
         }
@@ -198,15 +223,15 @@ public partial class MainViewModel : ObservableObject
             NetworkModeBadge = "🟢 MẠNG THẬT TCP (6 LAPTOP LAN/Wi-Fi)";
             NetworkModeBrush = (Brush)new BrushConverter().ConvertFrom("#10B981")!;
 
-            _transport = new RealTcpNetworkTransport(_config.Node, (IClockReader)_clock, _auditSink);
-            _leadership = new RealBullyLeadershipService(_config.Node, _transport, (IClockReader)_clock, _auditSink);
+            _transport = new TcpNetworkTransport(_config.Node, (IClockReader)_clock, _auditSink);
+            _leadership = new BullyLeadershipService(_config.Node, _transport, (IClockReader)_clock, _auditSink);
             _simLeadership = null;
         }
 
         _nodeApp = new NodeApplication(_clock, _transport, _leadership, _auditSink);
         _nodeApp.SnapshotChanged += OnSnapshotChanged;
         _nodeApp.RoundCompleted += OnRoundCompleted;
-        _auditSink.AuditEventLogged += OnAuditEventLogged;
+        _running = true;
 
         // Khởi động Node
         _ = _nodeApp.StartAsync(_config.Node);
@@ -249,8 +274,9 @@ public partial class MainViewModel : ObservableObject
 
     private void OnClockTimerTick(object? sender, EventArgs e)
     {
-        var now = DateTime.Now;
-        var utc = DateTime.UtcNow;
+        var utc = DateTimeOffset.FromUnixTimeMilliseconds(_clock.ReadUtcMs());
+        var now = utc.ToLocalTime();
+        if (_running && _nodeApp != null && ++_snapshotTicks % 10 == 0) OnSnapshotChanged(_nodeApp.GetSnapshot());
         LocalTimeDisplay = now.ToString("HH:mm:ss.fff");
         LocalUtcDisplay = utc.ToString("HH:mm:ss.fff UTC");
         CurrentDateDisplay = now.ToString("dddd, dd/MM/yyyy");
@@ -258,8 +284,10 @@ public partial class MainViewModel : ObservableObject
 
     private void OnSnapshotChanged(NodeSnapshot snapshot)
     {
-        Application.Current?.Dispatcher.Invoke(() =>
+        var generation = _generation;
+        Application.Current?.Dispatcher.InvokeAsync(() =>
         {
+            if (_closed || !_running || generation != _generation) return;
             IsMaster = snapshot.Role == NodeRole.Master;
             CurrentMasterId = snapshot.CurrentMasterId ?? "--";
             LeaderSessionId = snapshot.LeaderSessionId ?? 0;
@@ -282,7 +310,7 @@ public partial class MainViewModel : ObservableObject
             }
             else
             {
-                RoleBadge = "⚡ BẦU CỬ";
+                RoleBadge = snapshot.Role == NodeRole.Standalone ? "ĐÃ DỪNG" : "⚡ BẦU CỬ";
                 RoleBrush = (Brush)new BrushConverter().ConvertFrom("#A855F7")!;
             }
 
@@ -336,17 +364,18 @@ public partial class MainViewModel : ObservableObject
     {
         _auditSink.RecordRoundSummary(summary);
 
-        Application.Current?.Dispatcher.Invoke(() =>
+        Application.Current?.Dispatcher.InvokeAsync(() =>
         {
+            if (_closed) return;
             IsSyncInProgress = false;
             ActiveRoundId = summary.RoundId;
             AverageOffsetText = $"{summary.AverageOffsetMs:+0.00;-0.00} ms ({summary.AverageOffsetMs / 1000.0:+0.00;-0.00}s)";
 
             // Sai số đo lại thực tế (RemeasuredSpreadMs)
-            double remeasuredSpreadSec = (summary.RemeasuredSpreadMs ?? 0) / 1000.0;
-            PostSyncSpreadText = summary.RemeasuredSpreadMs.HasValue
-                ? $"{summary.RemeasuredSpreadMs.Value:F1} ms ({remeasuredSpreadSec:F3}s)"
-                : "< 10.0 ms (Hội tụ)";
+            double remeasuredSpreadSec = (summary.RemeasuredSpreadMs ?? double.NaN) / 1000.0;
+            PostSyncSpreadText = Verification.HasMeasurement(summary.RemeasuredSpreadMs)
+                ? $"{summary.RemeasuredSpreadMs.GetValueOrDefault():F1} ms ({remeasuredSpreadSec:F3}s)"
+                : "Chưa có số đo hợp lệ";
 
             LastRoundOutcomeText = summary.Outcome switch
             {
@@ -360,16 +389,16 @@ public partial class MainViewModel : ObservableObject
 
             // Đánh giá tiêu chí nghiệm thu (Verification Verdict)
             double thresholdSec = _config.AcceptanceThresholdSeconds;
-            bool isAcceptable = remeasuredSpreadSec <= thresholdSec && summary.Outcome == RoundOutcome.Success;
+            bool isAcceptable = Verification.MeetsThreshold(summary, thresholdSec);
 
             if (isAcceptable)
             {
-                VerificationVerdictText = $"✅ ĐẠT TIÊU CHÍ NGHIỆM THU (Sai số {remeasuredSpreadSec:F3}s ≤ {thresholdSec:F1}s)";
+                VerificationVerdictText = $"✅ ĐẠT NGƯỠNG TRÊN SỐ ĐO NHẬN ĐƯỢC (Sai số {remeasuredSpreadSec:F3}s ≤ {thresholdSec:F1}s)";
                 VerificationVerdictBrush = (Brush)new BrushConverter().ConvertFrom("#10B981")!;
             }
             else
             {
-                VerificationVerdictText = $"❌ CHƯA ĐẠT TIÊU CHÍ (Sai số vượt ngưỡng {thresholdSec:F1}s)";
+                VerificationVerdictText = $"CHƯA XÁC NHẬN ĐẠT (thiếu số đo, lỗi vòng hoặc vượt ngưỡng {thresholdSec:F1}s)";
                 VerificationVerdictBrush = (Brush)new BrushConverter().ConvertFrom("#EF4444")!;
             }
 
@@ -444,7 +473,7 @@ public partial class MainViewModel : ObservableObject
             // Hiển thị Notification Banner nổi bật
             ShowNotificationBanner(
                 title: $"KẾT QUẢ VÒNG {summary.RoundId}: {LastRoundOutcomeText}",
-                summary: $"Hội tụ toàn cụm: Sai số trước {PreSyncSpreadText} ➔ sau {PostSyncSpreadText} | Lệch trung bình: {AverageOffsetText}",
+                summary: $"Kết quả số đo: Sai số trước {PreSyncSpreadText} ➔ sau {PostSyncSpreadText} | Lệch trung bình: {AverageOffsetText}",
                 isSuccess: summary.Outcome == RoundOutcome.Success
             );
 
@@ -491,8 +520,9 @@ public partial class MainViewModel : ObservableObject
 
     private void OnAuditEventLogged(AuditEvent evt)
     {
-        Application.Current?.Dispatcher.Invoke(() =>
+        Application.Current?.Dispatcher.InvokeAsync(() =>
         {
+            if (_closed) return;
             lock (_logLock)
             {
                 _allLoggedEvents.Add(evt);
@@ -560,7 +590,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task TriggerSyncNowAsync()
     {
-        if (IsSyncInProgress) return;
+        if (IsSyncInProgress || !_running) return;
         if (!_leadership?.IAmMaster ?? false)
         {
             MessageBox.Show($"Chỉ máy Master ({CurrentMasterId}) mới có quyền kích hoạt vòng đồng bộ Berkeley!",
@@ -575,7 +605,12 @@ public partial class MainViewModel : ObservableObject
 
         if (_nodeApp != null)
         {
-            bool ok = await _nodeApp.TriggerSyncNowAsync();
+            var task = _nodeApp.TriggerSyncNowAsync(_runCts?.Token ?? default);
+            _syncTask = task;
+            bool ok;
+            try { ok = await task; }
+            catch (Exception ex) { ok = false; VerificationVerdictText = "Vòng đồng bộ lỗi: " + ex.Message; }
+            finally { IsSyncInProgress = false; _syncTask = null; }
             if (!ok)
             {
                 IsSyncInProgress = false;
@@ -584,39 +619,43 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task SimulateMasterCrashAsync()
+    private Task SimulateMasterCrashAsync() => _electionTask = RunElectionAsync();
+
+    private async Task RunElectionAsync()
     {
-        if (IsElecting) return;
+        if (IsElecting || !_running || IsSyncInProgress) return;
         IsElecting = true;
+        try
+        {
 
         if (_simLeadership != null)
         {
             // Trong chế độ giả lập
             await _simLeadership.TriggerBullyElectionSimulationAsync(step =>
             {
-                Application.Current?.Dispatcher.Invoke(() =>
+                Application.Current?.Dispatcher.InvokeAsync(() =>
                 {
                     ElectionStatusMessage = step;
                 });
-            });
+            }, _runCts?.Token ?? default);
         }
-        else if (_leadership is RealBullyLeadershipService realBully)
+        else if (_leadership is BullyLeadershipService realBully)
         {
             // Trong chế độ mạng thật TCP
             ElectionStatusMessage = $"[CẢNH BÁO] Giả lập sự cố Master {CurrentMasterId} -> Bắt đầu thuật toán Bully...";
-            await realBully.StartElectionAsync();
+            await realBully.StartElectionAsync(_runCts?.Token ?? default);
         }
 
-        IsElecting = false;
-        MessageBox.Show(
-            "Thuật toán bầu cử Bully (Lớn trị bé) đã hoàn tất!\nMaster mới đã được thiết lập và mở phiên lãnh đạo tiếp theo.",
-            "Bầu Cử Bully Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { ElectionStatusMessage = "Bầu chọn lỗi: " + ex.Message; }
+        finally { IsElecting = false; }
     }
 
     [RelayCommand]
     private void QuickDrift(string minutesStr)
     {
-        if (!double.TryParse(minutesStr, out double minutes)) return;
+        if (!_running || IsSyncInProgress || !double.TryParse(minutesStr, out double minutes)) return;
         double offsetMs = minutes * 60 * 1000;
 
         var res = _clock.ApplyStep(NodeId, "MANUAL_DRIFT", offsetMs);
@@ -626,8 +665,8 @@ public partial class MainViewModel : ObservableObject
                 NodeId, AuditEventKind.ClockAdjusted,
                 $"[DEMO CHỈNH LỆCH] Đã cố tình chỉnh giờ Windows {minutes:+0;-0} phút"));
 
-            MessageBox.Show($"Đã chỉnh giờ Windows lệch {minutes:+0;-0} phút thành công!\nQuan sát đồng hồ góc phải Taskbar của bạn đã nhảy số.",
-                "Chỉnh Giờ Windows Thật", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show($"Đã chỉnh đồng hồ đang chọn lệch {minutes:+0;-0} phút thành công!\nChế độ demo chỉ thay đổi đồng hồ mô phỏng.",
+                "Chỉnh đồng hồ", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         else
         {
@@ -669,7 +708,8 @@ public partial class MainViewModel : ObservableObject
 
         if (dialog.ShowDialog() == true)
         {
-            await _auditSink.ExportAuditToCsvAsync(dialog.FileName);
+            try { await _auditSink.ExportAuditToCsvAsync(dialog.FileName); }
+            catch (Exception ex) { MessageBox.Show(ex.Message, "Không xuất được nhật ký"); return; }
             MessageBox.Show($"Đã xuất toàn bộ nhật ký gói tin và audit ra file:\n{dialog.FileName}",
                 "Xuất File CSV Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -709,11 +749,12 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSaveConfig))]
     private async Task SaveConfigAndRestartAsync()
     {
         try
         {
+            if (_stopping || IsSyncInProgress || IsElecting) throw new InvalidOperationException("Chờ thao tác hiện tại hoàn tất trước khi thay cấu hình.");
             // Cập nhật đối tượng cấu hình
             var peersList = ConfigPeers.Select(p => new PeerConfig(p.NodeId, p.Address, p.Port)).ToList();
 
@@ -738,15 +779,14 @@ public partial class MainViewModel : ObservableObject
                 AcceptanceThresholdSeconds = ConfigAcceptanceThresholdSeconds
             };
 
+            newConfig.AutoStartOnLaunch = _config.AutoStartOnLaunch;
+            ConfigValidator.Validate(newConfig);
             // Lưu vào file JSON
             AppConfigManager.Save(newConfig);
             _config = newConfig;
+            AcceptanceThresholdText = $"Ngưỡng cấu hình: ≤ {newConfig.AcceptanceThresholdSeconds:F1}s";
 
-            // Dừng Node cũ
-            if (_nodeApp != null)
-            {
-                await _nodeApp.StopAsync();
-            }
+            await StopNodeAsync();
 
             // Khởi động lại dịch vụ theo cấu hình mới
             InitializeNodeApplication();
@@ -769,6 +809,7 @@ public partial class MainViewModel : ObservableObject
     {
         try
         {
+            await _auditSink.FlushAsync();
             var rounds = await _auditSink.GetRecentRoundsAsync(50);
             RecentRounds.Clear();
             foreach (var r in rounds)
@@ -776,10 +817,7 @@ public partial class MainViewModel : ObservableObject
                 RecentRounds.Add(r);
             }
         }
-        catch
-        {
-            // Bỏ qua lỗi
-        }
+        catch (Exception ex) { VerificationVerdictText = "Lỗi đọc lịch sử: " + ex.Message; }
     }
 
     [RelayCommand]
@@ -795,12 +833,7 @@ public partial class MainViewModel : ObservableObject
         {
             try
             {
-                using var writer = new StreamWriter(dialog.FileName);
-                await writer.WriteLineAsync("RoundId,Master,Session,StartedAt,EndedAt,AvgOffsetMs,SpreadMs,Outcome,Accepted,Rejected");
-                foreach (var r in RecentRounds)
-                {
-                    await writer.WriteLineAsync($"{r.RoundId},{r.MasterNodeId},{r.LeaderSessionId},{r.StartedAt:o},{r.EndedAt:o},{r.AverageOffsetMs:F2},{r.RemeasuredSpreadMs?.ToString("F2") ?? "N/A"},{r.Outcome},{r.AcceptedCount},{r.RejectedCount}");
-                }
+                await _auditSink.ExportRoundsToCsvAsync(dialog.FileName);
 
                 MessageBox.Show($"Đã xuất lịch sử ra file: {dialog.FileName}",
                     "Xuất File Thành Công", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -811,4 +844,52 @@ public partial class MainViewModel : ObservableObject
             }
         }
     }
+    [RelayCommand]
+    private void StartNode()
+    {
+        if (_running || _closed || _stopping) return;
+        try { InitializeNodeApplication(); }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "Không khởi động được Node"); }
+    }
+
+    [RelayCommand]
+    private Task StopNodeAsync() => _stopTask is { IsCompleted: false } ? _stopTask : (_stopTask = StopCoreAsync());
+
+    private async Task StopCoreAsync()
+    {
+        _stopping = true;
+        try
+        {
+        _generation++;
+        _running = false;
+        if (_clock is DesktopClock clock) clock.AllowAdjustments = false;
+        _runCts?.Cancel();
+        if (_syncTask != null) { try { await _syncTask; } catch (Exception ex) { VerificationVerdictText = "Vòng đã dừng: " + ex.Message; } }
+        if (_electionTask != null) await _electionTask;
+        if (_nodeApp != null)
+        {
+            _nodeApp.SnapshotChanged -= OnSnapshotChanged;
+            _nodeApp.RoundCompleted -= OnRoundCompleted;
+            await _nodeApp.StopAsync();
+            _nodeApp = null;
+        }
+        if (_leadership is IAsyncDisposable al) await al.DisposeAsync();
+        else if (_leadership is IDisposable dl) dl.Dispose();
+        if (_transport is IAsyncDisposable at) await at.DisposeAsync();
+        else if (_transport is IDisposable dt) dt.Dispose();
+        _leadership = null; _transport = null; _simLeadership = null;
+        _runCts?.Dispose(); _runCts = null;
+        IsMaster = false; IsSyncInProgress = false; RoleBadge = "ĐÃ DỪNG";
+        }
+        finally { _stopping = false; }
+    }
+
+    public async Task CloseAsync()
+    {
+        _closed = true;
+        _clockTimer.Stop(); _bannerDismissTimer?.Stop();
+        try { await StopNodeAsync(); }
+        finally { _auditSink.AuditEventLogged -= OnAuditEventLogged; await _auditSink.DisposeAsync(); }
+    }
+
 }

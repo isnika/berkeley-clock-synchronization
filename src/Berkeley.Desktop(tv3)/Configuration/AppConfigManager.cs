@@ -1,51 +1,25 @@
 using System.IO;
 using System.Text.Json;
-
 namespace Berkeley.Desktop.Configuration;
-
-/// <summary>
-/// Quản lý đọc và ghi file cấu hình JSON của ứng dụng.
-/// </summary>
 public static class AppConfigManager
 {
-    private static readonly string ConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "node_config.json");
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BerkeleyTimeSync");
+    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
+    public static AppConfig Load(string? path = null)
     {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true
-    };
-
-    public static AppConfig Load()
-    {
-        try
-        {
-            if (File.Exists(ConfigPath))
-            {
-                string json = File.ReadAllText(ConfigPath);
-                var cfg = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions);
-                if (cfg != null) return cfg;
-            }
-        }
-        catch
-        {
-            // Fallback to default
-        }
-
-        var defaultConfig = new AppConfig();
-        Save(defaultConfig);
-        return defaultConfig;
+        path ??= Path.Combine(DataDirectory, "node_config.json");
+        if (!File.Exists(path)) return new AppConfig();
+        var config = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), Options) ?? throw new InvalidDataException("Cấu hình rỗng.");
+        ConfigValidator.Validate(config);
+        return config;
     }
-
-    public static void Save(AppConfig config)
+    public static void Save(AppConfig config, string? path = null)
     {
-        try
-        {
-            string json = JsonSerializer.Serialize(config, JsonOptions);
-            File.WriteAllText(ConfigPath, json);
-        }
-        catch
-        {
-            // Ignore
-        }
+        ConfigValidator.Validate(config);
+        path = Path.GetFullPath(path ?? Path.Combine(DataDirectory, "node_config.json"));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try { File.WriteAllText(temporary, JsonSerializer.Serialize(config, Options)); File.Move(temporary, path, true); }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 }
