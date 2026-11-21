@@ -9,6 +9,8 @@ luồng build Mac được lưu tại `archive/macos`, ngoài solution/CI hiện
 
 ## Chạy nhanh
 
+[Hướng dẫn team kiểm thử: chuẩn bị máy, kết nối LAN và các thao tác bắt buộc](docs/huong-dan-team-kiem-thu.md).
+
 Cần Windows 10/11 và .NET 10 SDK. Trong PowerShell:
 
 ```powershell
@@ -33,13 +35,16 @@ Mở ứng dụng bằng **Run as administrator**, vào **Cấu hình mạng**, 
 online và cùng Master/phiên. Nhấn **ĐỒNG BỘ NGAY** tại Master. Worker tự xử lý lệnh.
 
 Thử hai máy trước, rồi ba máy với mất Master, cuối cùng sáu máy. Kiểm tra từng
-Step và spread đo lại; đồng bộ hiện được kích hoạt thủ công. Không dùng IP
+Step và spread đo lại. Bật AutoSync trong Cấu hình mạng để tự đồng bộ định kỳ
+và sau tái gia nhập đã thống nhất Master/phiên; nút thủ công vẫn dùng được. Không dùng IP
 `127.0.0.1` để trỏ tới máy khác. Cho phép cổng TCP trên firewall của mạng thử.
 
 [Hướng dẫn chạy, cấu hình hai máy, dữ liệu cũ và nghiệm thu LAN](docs/huong-dan-windows.md).
 [Đối chiếu đầy đủ chức năng giao diện WPF và Windows mới](docs/doi-chieu-giao-dien-windows.md).
 [Kết quả cập nhật và kiểm chứng](docs/cap-nhat-windows-chinh.md).
 [Kết quả merge main/TV1 và 98 kiểm thử đạt](docs/ket-qua-merge-main-ui.md).
+[Sửa R01: tự thống nhất Master/phiên khi node trở lại; 106 kiểm thử đạt](docs/sua-r01-master-tai-gia-nhap.md).
+[AutoSync: cấu hình, quy trình và kiểm chứng](docs/tu-dong-dong-bo.md).
 
 ## Build, test, tạo gói EXE
 

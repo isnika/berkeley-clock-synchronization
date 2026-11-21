@@ -103,8 +103,31 @@ hợp lệ và 6 Step Applied**, kèm spread đo lại. Không suy ra tất cả
 từ một vòng chỉ có một phần máy tham gia. Chỉ dùng trên LAN tin cậy; protocol hiện
 chưa có xác thực/mã hóa peer.
 
-Đồng bộ hiện được kích hoạt thủ công; AutoSync chưa được triển khai. Ngưỡng mặc định
-60 giây là cấu hình ứng dụng, cần sửa theo tiêu chí nghiệm thu của nhóm.
+AutoSync đã được triển khai cho TCP: bật trong Cấu hình mạng, nhập chu kỳ
+(mặc định 30 giây; hợp lệ 1-86400), rồi Lưu và khởi động lại. Cấu hình mới mặc định bật;
+bật trên cả hai máy để tự điều phối khi đổi Master. Sau khi peer online xác
+nhận cùng Master/phiên và ổn định, Master tự chạy vòng Berkeley, rồi chạy định
+kỳ. Nút Đồng bộ ngay vẫn dùng được giữa các vòng. Tắt AutoSync cho các ca đo
+thủ công; Demo dùng nút thủ công. [Quy trình và kiểm chứng](tu-dong-dong-bo.md).
+Ngưỡng spread mặc định 60 giây cần sửa theo tiêu chí nghiệm thu của nhóm.
+
+Cấu hình cũ đã lưu AutoSync tắt vẫn giữ nguyên; bật lại trong giao diện nếu muốn
+chạy tự động. Cấu hình thiếu trường AutoSync dùng mặc định bật.
+
+### Master cũ khởi động lại (R01)
+
+Dùng cùng gói đã sửa R01 trên cả hai máy. Khi Node2 dừng, Node1 tự lên Master
+ở phiên mới. Giữ Node1 chạy và khởi động lại Node2: hai máy tự trao đổi phiên,
+Node2 bầu lại theo Bully ở phiên lớn hơn rồi cùng thống nhất Node2/phiên mới.
+Không cần nhấn Bầu chọn hoặc dừng cả hai máy. Worker có ưu tiên thấp hơn quay
+lại sẽ nhận phiên đang hoạt động, không làm thay Master.
+
+Chờ 2/2 online, bầu chọn kết thúc và **cùng Master/phiên trên cả hai màn hình**
+rồi mới Sync. Xác nhận một mẫu Worker, hai Applied và spread đo lại. Nếu sau
+30 giây vẫn khác nhau, lưu log/ảnh hai máy và đánh dấu ca chưa đạt; đây là mốc
+chẩn đoán, không phải SLA. Bầu chọn có thể đổi phiên hơn một lần. Kiểm tra tự
+động đã đạt trên loopback, vẫn cần nghiệm thu LAN vật lý; Bully không bảo đảm
+chống hai Master trong lúc mạng bị chia cắt. [Phân tích và kết quả R01](sua-r01-master-tai-gia-nhap.md).
 
 ## Cấu hình và dữ liệu cũ
 

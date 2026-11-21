@@ -13,7 +13,7 @@ public sealed class AppConfig
     public NodeConfig Node { get; set; } = CreateDefaultNodeConfig("Node1", 5001);
     public bool AutoStartOnLaunch { get; set; } = true;
     public bool UseSimulatedCluster { get; set; } = true;
-    public bool AutoSyncEnabled { get; set; } = false;
+    public bool AutoSyncEnabled { get; set; } = true;
     public int AutoSyncIntervalSeconds { get; set; } = 30;
 
     /// <summary>

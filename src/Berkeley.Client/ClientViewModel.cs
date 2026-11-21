@@ -128,6 +128,8 @@ public partial class ClientViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty] private string _configPort = "5001";
     [ObservableProperty] private bool _configDemo = true;
     [ObservableProperty] private bool _configAutoStart = true;
+    [ObservableProperty] private bool _configAutoSync = true;
+    [ObservableProperty] private string _configAutoSyncInterval = "30";
     [ObservableProperty] private string _configThreshold = "60";
     [ObservableProperty] private string _configHeartbeat = "2000";
     [ObservableProperty] private string _configHeartbeatTimeout = "6000";
@@ -182,10 +184,11 @@ public partial class ClientViewModel : ObservableObject, IAsyncDisposable
             int online = (IsRunning ? 1 : 0) + peers.Count(p => p.ConnectionState == PeerConnectionState.Connected);
             OperatorHint = !IsRunning ? "Nhấn Khởi động để kết nối cụm máy."
                 : IsElecting ? "Đang bầu chọn Master; chờ các máy thống nhất Master và phiên."
-                : IsBusy ? "Đang xử lý thao tác; chờ hoàn tất hoặc nhấn Dừng Node để hủy vòng đang chạy."
-                : !IsMaster ? "Máy này là Worker. Nhấn ĐỒNG BỘ NGAY trên máy Master; Worker tự nhận và xử lý lệnh."
+                : IsBusy || _session.IsSyncing ? "Đang xử lý thao tác; chờ hoàn tất hoặc nhấn Dừng Node để hủy vòng đang chạy."
+                : !IsMaster ? "Máy này là Worker, tự nhận lệnh từ Master qua AutoSync hoặc nút ĐỒNG BỘ NGAY trên Master."
                 : online < _config.Node.Peers.Count + 1 ? "Còn máy chưa kết nối. Kiểm tra IP/cổng và firewall trước khi xác nhận đồng bộ toàn cụm."
-                : "Cụm máy đã kết nối. Nhấn ĐỒNG BỘ NGAY để chạy một vòng; đồng bộ hiện được kích hoạt thủ công.";
+                : _config.AutoSyncEnabled && !_session.IsSimulated ? $"AutoSync mỗi {_config.AutoSyncIntervalSeconds} giây và sau tái gia nhập khi thống nhất Master/phiên. Có thể Đồng bộ ngay."
+                : "AutoSync đang tắt hoặc đang Demo. Nhấn ĐỒNG BỘ NGAY; bật AutoSync trong cấu hình để chạy TCP tự động.";
             Connected = $"{(IsRunning ? 1 : 0) + peers.Count(p => p.ConnectionState == PeerConnectionState.Connected)}/{_config.Node.Peers.Count + 1} máy online";
             var nodes = new List<NodeRow>();
             _adjustments.TryGetValue(_config.Node.NodeId, out var ownStep);
@@ -250,9 +253,9 @@ public partial class ClientViewModel : ObservableObject, IAsyncDisposable
     }
 
     private bool CanStart() => !IsRunning && !IsBusy && !_disposed;
-    private bool CanSync() => IsRunning && IsMaster && !IsBusy && !_session.IsElecting;
-    private bool CanAct() => IsRunning && !IsBusy && !_session.IsElecting;
-    private bool CanEdit() => !IsBusy && !_session.IsElecting && !_disposed;
+    private bool CanSync() => IsRunning && IsMaster && !IsBusy && !_session.IsSyncing && !_session.IsElecting;
+    private bool CanAct() => IsRunning && !IsBusy && !_session.IsSyncing && !_session.IsElecting;
+    private bool CanEdit() => !IsBusy && !_session.IsSyncing && !_session.IsElecting && !_disposed;
     private bool CanStop() => IsRunning && !_replacingSession && !_disposed;
     private void UpdateCommands()
     {
@@ -366,6 +369,7 @@ public partial class ClientViewModel : ObservableObject, IAsyncDisposable
         ConfigNodeId = n.NodeId; ConfigName = n.DisplayName; ConfigAddress = n.ListenAddress;
         ConfigPort = n.ListenPort.ToString(CultureInfo.InvariantCulture); ConfigDemo = _config.UseSimulatedCluster;
         ConfigAutoStart = _config.AutoStartOnLaunch; ConfigThreshold = _config.AcceptanceThresholdSeconds.ToString(CultureInfo.InvariantCulture);
+        ConfigAutoSync = _config.AutoSyncEnabled; ConfigAutoSyncInterval = _config.AutoSyncIntervalSeconds.ToString(CultureInfo.InvariantCulture);
         ConfigHeartbeat = p.HeartbeatIntervalMs.ToString(); ConfigHeartbeatTimeout = p.HeartbeatTimeoutMs.ToString();
         ConfigElectionTimeout = p.ElectionTimeoutMs.ToString(); ConfigSampleTimeout = p.SampleTimeoutMs.ToString();
         ConfigMaxAge = p.SampleMaxAgeMs.ToString(); ConfigRoundTimeout = p.RoundTimeoutMs.ToString(); SetPeers(n.Peers);
@@ -384,7 +388,8 @@ public partial class ClientViewModel : ObservableObject, IAsyncDisposable
                 new(Number(ConfigHeartbeat, "Heartbeat"), Number(ConfigHeartbeatTimeout, "Heartbeat timeout"),
                     Number(ConfigElectionTimeout, "Election timeout"), Number(ConfigSampleTimeout, "Sample timeout"),
                     Number(ConfigMaxAge, "Sample max age"), Number(ConfigRoundTimeout, "Round timeout"))),
-            UseSimulatedCluster = ConfigDemo, AutoStartOnLaunch = ConfigAutoStart, AcceptanceThresholdSeconds = threshold
+            UseSimulatedCluster = ConfigDemo, AutoStartOnLaunch = ConfigAutoStart, AcceptanceThresholdSeconds = threshold,
+            AutoSyncEnabled = ConfigAutoSync, AutoSyncIntervalSeconds = Number(ConfigAutoSyncInterval, "Chu kỳ AutoSync")
         };
         ConfigValidator.Validate(config); // Validate before touching disk or stopping a working node.
         AppConfigManager.Save(config, _configPath);

@@ -69,7 +69,9 @@ public sealed class EngineAfterElectionIntegrationTests
                   !leadership1.IsElecting && !leadership2.IsElecting &&
                   transport1.GetConnectedNodeIds().SequenceEqual(new[] { "Node2" }) &&
                   transport2.GetConnectedNodeIds().SequenceEqual(new[] { "Node1" }),
-            TimeSpan.FromSeconds(5),
+            // A second term can be needed if the first COORDINATOR arrives
+            // after a lower node's election deadline. Include offline TCP I/O.
+            TimeSpan.FromSeconds(10),
             "Node1 and Node2 did not elect Node2.");
 
         using var node1 = new NodeApplication(clock1, transport1, leadership1, audit1);

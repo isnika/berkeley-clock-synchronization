@@ -34,7 +34,7 @@ public class ClientIntegrationTests
         var existingConfig = NetworkingTestHelpers.Config(existingId, existingPort, [(portableId, portablePort)], 100, 2000, 500);
         var portableClock = new TestClock(1_700_000_000_000 + skew);
         var existingClock = new TestClock();
-        await using var portable = new ClientSession(new AppConfig { Node = portableConfig, UseSimulatedCluster = false },
+        await using var portable = new ClientSession(new AppConfig { Node = portableConfig, UseSimulatedCluster = false, AutoSyncEnabled = false },
             _directory, _ => new ClientClock(portableClock));
         var audit = new TestAuditSink();
         // This is the same TCP/Bully/NodeApplication bootstrap used by WPF.

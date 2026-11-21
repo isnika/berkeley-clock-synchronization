@@ -20,6 +20,8 @@ public sealed class ClientSession : IAsyncDisposable
     private ILeadershipService? _leadership;
     private CancellationTokenSource? _runCts;
     private bool _closed;
+    private AutomaticSyncCoordinator? _automatic;
+    public bool IsSyncing => Snapshot()?.RoundPhase is RoundPhase.Measuring or RoundPhase.Adjusting or RoundPhase.Verifying;
     public SqliteAuditSink Audit { get; }
     public bool IsRunning => _node?.IsRunning == true;
     public bool IsElecting => (_leadership as BullyLeadershipService)?.IsElecting == true;
@@ -66,6 +68,12 @@ public sealed class ClientSession : IAsyncDisposable
                 _node = new(_clock, _transport, _leadership, Audit);
                 _node.RoundCompleted += OnRoundCompleted;
                 await _node.StartAsync(_config.Node, _runCts.Token);
+                if (!_config.UseSimulatedCluster)
+                    _automatic = new(_transport, new(_config.Node, _node.Identity!.BootId,
+                        _config.AutoSyncEnabled, _config.AutoSyncIntervalSeconds, Snapshot, () => IsElecting,
+                        () => _clock.ReadMonotonicMs(), SyncAutomaticAsync,
+                        ex => Audit.Record(new(0, DateTimeOffset.UtcNow, _clock.ReadMonotonicMs(),
+                            _config.Node.NodeId, AuditEventKind.MessageRejected, "AutoSync: " + ex.Message))), _runCts.Token);
             }
             catch { await StopCoreAsync(); throw; }
         }
@@ -81,8 +89,18 @@ public sealed class ClientSession : IAsyncDisposable
 
     public async Task<bool> SyncAsync()
     {
-        await _operation.WaitAsync();
-        try { return _node != null && await _node.TriggerSyncNowAsync(_runCts!.Token); }
+        if (!await _operation.WaitAsync(0)) return false;
+        try { return !IsElecting && _node != null && await _node.TriggerSyncNowAsync(_runCts!.Token); }
+        finally { _operation.Release(); }
+    }
+    private async Task<bool> SyncAutomaticAsync(LeaderSession expected, CancellationToken ct)
+    {
+        if (!await _operation.WaitAsync(0, ct)) return false;
+        try
+        {
+            if (!IsRunning || IsElecting || _leadership?.IAmMaster != true || _leadership.CurrentLeader != expected) return false;
+            return await _node!.TriggerSyncNowAsync(ct);
+        }
         finally { _operation.Release(); }
     }
     public async Task ElectAsync(Action<string> progress)
@@ -122,6 +140,7 @@ public sealed class ClientSession : IAsyncDisposable
     private async Task StopCoreAsync()
     {
         _clock.AllowAdjustments = false;
+        if (_automatic != null) { await _automatic.DisposeAsync(); _automatic = null; }
         if (_node != null)
         {
             _node.RoundCompleted -= OnRoundCompleted;

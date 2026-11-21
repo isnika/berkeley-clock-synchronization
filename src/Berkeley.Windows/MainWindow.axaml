@@ -144,7 +144,12 @@
               <CheckBox Content="Demo mô phỏng · không đổi giờ hệ điều hành" IsChecked="{Binding ConfigDemo}" Margin="0,0,25,0"/>
               <CheckBox Content="Tự khởi động Node khi mở ứng dụng" IsChecked="{Binding ConfigAutoStart}"/>
             </WrapPanel>
-            <TextBlock Text="Bỏ chọn Demo để dùng TCP và chỉnh giờ thật. Chạy bằng quyền Administrator để chỉnh giờ Windows thật. Đồng bộ được kích hoạt thủ công." TextWrapping="Wrap" Foreground="#FBBF24"/>
+            <WrapPanel>
+              <CheckBox Content="AutoSync · định kỳ và khi node trở lại (TCP)" IsChecked="{Binding ConfigAutoSync}" Margin="0,0,25,0"/>
+              <TextBlock Text="Chu kỳ (giây):" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <TextBox Text="{Binding ConfigAutoSyncInterval}" Width="100"/>
+            </WrapPanel>
+            <TextBlock Text="Bật AutoSync trên các máy muốn tự điều phối khi làm Master, rồi Lưu và khởi động lại. Chu kỳ 1–86400 giây; mặc định 30. Chỉ áp dụng TCP; cần quyền Administrator để chỉnh giờ thật. Nút Đồng bộ ngay vẫn dùng được." TextWrapping="Wrap" Foreground="#FBBF24"/>
             <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="12">
               <StackPanel><TextBlock Text="Heartbeat interval (ms)"/><TextBox Text="{Binding ConfigHeartbeat}"/></StackPanel>
               <StackPanel Grid.Column="1"><TextBlock Text="Heartbeat timeout (ms)"/><TextBox Text="{Binding ConfigHeartbeatTimeout}"/></StackPanel>
