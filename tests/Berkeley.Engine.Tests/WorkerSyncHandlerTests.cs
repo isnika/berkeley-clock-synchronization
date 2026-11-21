@@ -185,8 +185,13 @@ public class WorkerSyncHandlerTests
     }
 
     [TestMethod]
-    [Description("Worker nhận ADJUST đã hết hạn (age > MaxAgeMs) -> Báo Rejected")]
-    public void HandleAdjust_Expired_Rejected()
+    [Description(
+        "Worker nhận ADJUST có SentAtUtcMs cũ (age > MaxAgeMs tính theo UTC Worker) " +
+        "-> Vẫn áp dụng vì Worker không so sánh UTC cross-machine. " +
+        "Lý do: Worker.nowUtc - Master.SentAt sẽ bị sai khi đồng hồ 2 máy lệch nhau, " +
+        "đây chính là điều Berkeley đang cố sửa. " +
+        "Bảo vệ chống replay đã có qua idempotency (MessageId) + session validation.")]
+    public void HandleAdjust_ExpiredByUTC_StillApplied_BecauseSessionValidationSuffices()
     {
         _clock.SetUtcMs(100_000);
 
@@ -195,7 +200,8 @@ public class WorkerSyncHandlerTests
             sourceNodeId: "Master1",
             sourceBootId: Guid.NewGuid(),
             targetNodeId: "Worker1",
-            // SentAt cách đây 10,000ms nhưng MaxAge chỉ 3,000ms
+            // SentAt cách đây 10,000ms (theo UTC Worker), MaxAge chỉ 3,000ms
+            // -> nếu kiểm tra age cross-machine sẽ Reject — nhưng ta KHÔNG làm vậy
             payload: new AdjustPayload(AdjustmentMs: 500, SentAtUtcMs: 90_000, MaxAgeMs: 3000),
             roundId: "round-1",
             leaderSessionId: 1
@@ -203,13 +209,13 @@ public class WorkerSyncHandlerTests
 
         _transport.SimulateReceive(adjustMsg);
 
-        // Đồng hồ không đổi
-        Assert.AreEqual(100_000L, _clock.ReadUtcMs());
+        // Lệnh vẫn được áp dụng — đồng hồ tăng 500ms
+        Assert.AreEqual(100_500L, _clock.ReadUtcMs());
 
         Assert.AreEqual(1, _transport.SentMessages.Count);
         var payload = _transport.SentMessages[0].Message.DeserializePayload<AdjustResultPayload>();
         Assert.IsNotNull(payload);
-        Assert.AreEqual(AdjustmentStatus.Rejected, payload.Result.Status);
+        Assert.AreEqual(AdjustmentStatus.Applied, payload.Result.Status);
     }
 }
 
