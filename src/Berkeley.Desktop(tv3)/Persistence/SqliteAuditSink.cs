@@ -1,4 +1,6 @@
 using System.IO;
+using Berkeley.Desktop.Configuration;
+using System.Globalization;
 using System.Text.Json;
 using System.Threading.Channels;
 using Berkeley.Contracts;
@@ -13,22 +15,23 @@ namespace Berkeley.Desktop.Persistence;
 public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
 {
     private readonly string _connectionString;
-    private readonly Channel<AuditEvent> _eventChannel;
-    private readonly CancellationTokenSource _cts = new();
+    private sealed record WriteItem(AuditEvent? Event = null, Func<Task>? Job = null);
+    private readonly Channel<WriteItem> _eventChannel;
     private readonly Task _writerTask;
     private bool _disposed;
+    private Exception? _writeError;
+    public event Action<string>? StorageFailed;
+    private void Fail(Exception ex) { _writeError = ex; StorageFailed?.Invoke(ex.Message); }
 
     public event Action<AuditEvent>? AuditEventLogged;
 
     public SqliteAuditSink(string? dbPath = null)
     {
-        dbPath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "berkeley_audit.db");
+        dbPath ??= Path.Combine(AppConfigManager.DataDirectory, "berkeley_audit.db");
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(dbPath))!);
         _connectionString = $"Data Source={dbPath}";
 
-        _eventChannel = Channel.CreateUnbounded<AuditEvent>(new UnboundedChannelOptions
-        {
-            SingleReader = true
-        });
+        _eventChannel = Channel.CreateBounded<WriteItem>(new BoundedChannelOptions(4096) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
 
         InitializeDatabase();
         _writerTask = Task.Run(ProcessQueueAsync);
@@ -73,13 +76,14 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
     public void Record(AuditEvent auditEvent)
     {
         if (_disposed) return;
-        _eventChannel.Writer.TryWrite(auditEvent);
+        if (!_eventChannel.Writer.TryWrite(new(Event: auditEvent))) { Fail(new IOException("Hàng đợi lưu trữ đã đầy.")); return; }
         AuditEventLogged?.Invoke(auditEvent);
     }
 
     public void RecordRoundSummary(RoundSummary summary)
     {
-        Task.Run(async () =>
+        if (_disposed) throw new ObjectDisposedException(nameof(SqliteAuditSink));
+        if (!_eventChannel.Writer.TryWrite(new(Job: async () =>
         {
             try
             {
@@ -110,46 +114,51 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
 
                 await cmd.ExecuteNonQueryAsync();
             }
-            catch
-            {
-                // Silent fail to not crash app
-            }
-        });
+            catch (Exception ex) { Fail(ex); }
+        }))) Fail(new IOException("Hàng đợi lưu trữ đã đầy."));
     }
 
     private async Task ProcessQueueAsync()
     {
-        var buffer = new List<AuditEvent>(50);
-
-        try
+        // One transaction per event cannot keep up with heartbeat/status traffic
+        // on slower disks. Drain consecutive audit records into bounded batches.
+        // Summary jobs and Flush barriers retain their exact FIFO position.
+        var batch = new List<AuditEvent>(256);
+        while (await _eventChannel.Reader.WaitToReadAsync().ConfigureAwait(false))
         {
-            while (await _eventChannel.Reader.WaitToReadAsync(_cts.Token))
+            while (_eventChannel.Reader.TryRead(out var item))
             {
-                buffer.Clear();
-                while (buffer.Count < 50 && _eventChannel.Reader.TryRead(out var evt))
+                if (item.Event is { } evt)
                 {
-                    buffer.Add(evt);
+                    batch.Add(evt);
+                    if (batch.Count < 256) continue;
                 }
-
-                if (buffer.Count > 0)
+                if (batch.Count > 0)
                 {
-                    await WriteBatchAsync(buffer);
+                    await WriteBatchAsync(batch).ConfigureAwait(false);
+                    batch.Clear();
                 }
+                if (item.Job is { } job)
+                    try { await job().ConfigureAwait(false); } catch (Exception ex) { Fail(ex); }
+            }
+            if (batch.Count > 0)
+            {
+                await WriteBatchAsync(batch).ConfigureAwait(false);
+                batch.Clear();
             }
         }
-        catch (OperationCanceledException)
+    }
+
+    public async Task FlushAsync()
+    {
+        if (!_disposed)
         {
-            // draining remaining
-            buffer.Clear();
-            while (_eventChannel.Reader.TryRead(out var evt))
-            {
-                buffer.Add(evt);
-            }
-            if (buffer.Count > 0)
-            {
-                await WriteBatchAsync(buffer);
-            }
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            await _eventChannel.Writer.WriteAsync(new(Job: () => { done.SetResult(); return Task.CompletedTask; }));
+            await done.Task;
         }
+        else await _writerTask;
+        if (_writeError != null) throw new IOException("Không lưu được toàn bộ dữ liệu.", _writeError);
     }
 
     private async Task WriteBatchAsync(List<AuditEvent> batch)
@@ -192,10 +201,7 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
 
             trans.Commit();
         }
-        catch
-        {
-            // Handled
-        }
+        catch (Exception ex) { Fail(ex); }
     }
 
     public async Task<List<AuditEvent>> GetRecentEventsAsync(int limit = 200)
@@ -208,7 +214,7 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                SELECT sequence, occurred_at, monotonic_ms, source_node_id, kind, summary
+                SELECT sequence, occurred_at, monotonic_ms, source_node_id, kind, summary, detail
                 FROM audit_events
                 ORDER BY id DESC
                 LIMIT $limit;";
@@ -224,13 +230,10 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
                 Enum.TryParse<AuditEventKind>(reader.GetString(4), out var kind);
                 string summary = reader.GetString(5);
 
-                list.Add(new AuditEvent(seq, occ, mono, src, kind, summary));
+                list.Add(new AuditEvent(seq, occ, mono, src, kind, summary, reader.IsDBNull(6) ? null : JsonSerializer.Deserialize<JsonElement>(reader.GetString(6))));
             }
         }
-        catch
-        {
-            // Ignored
-        }
+        catch (Exception ex) { StorageFailed?.Invoke(ex.Message); throw; }
 
         return list;
     }
@@ -269,16 +272,14 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
                 ));
             }
         }
-        catch
-        {
-            // Ignored
-        }
+        catch (Exception ex) { StorageFailed?.Invoke(ex.Message); throw; }
 
         return list;
     }
 
     public async Task ExportAuditToCsvAsync(string filePath)
     {
+        await FlushAsync();
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
@@ -291,7 +292,7 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            string line = $"{reader.GetInt64(0)},\"{reader.GetString(1)}\",\"{reader.GetString(2)}\",\"{reader.GetString(3)}\",\"{reader.GetString(4).Replace("\"", "\"\"")}\"";
+            string line = string.Join(",", Enumerable.Range(0, 5).Select(i => Csv(reader.GetValue(i))));
             await writer.WriteLineAsync(line);
         }
     }
@@ -306,32 +307,29 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
         await cmd.ExecuteNonQueryAsync();
     }
 
-    public void Dispose()
+    public static string Csv(object? value) => "\"" + (Convert.ToString(value, CultureInfo.InvariantCulture) ?? "").Replace("\"", "\"\"") + "\"";
+
+    public async Task ExportRoundsToCsvAsync(string path)
     {
-        if (_disposed) return;
-        _disposed = true;
-        _cts.Cancel();
-        _eventChannel.Writer.Complete();
-        _writerTask.Wait(1000);
-        _cts.Dispose();
+        await FlushAsync();
+        var rounds = await GetRecentRoundsAsync(int.MaxValue);
+        using var writer = new StreamWriter(path);
+        await writer.WriteLineAsync("RoundId,Master,Session,StartedAt,EndedAt,AvgOffsetMs,SpreadMs,Outcome,Accepted,Rejected");
+        foreach (var r in rounds)
+            await writer.WriteLineAsync(string.Join(",", new object?[] { r.RoundId, r.MasterNodeId, r.LeaderSessionId, r.StartedAt.ToString("o"), r.EndedAt.ToString("o"), r.AverageOffsetMs, r.RemeasuredSpreadMs, r.Outcome, r.AcceptedCount, r.RejectedCount }.Select(Csv)));
     }
 
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
     public async ValueTask DisposeAsync()
     {
-        if (_disposed) return;
-        _disposed = true;
-        _cts.Cancel();
-        _eventChannel.Writer.Complete();
-        try
-        {
-            await _writerTask;
-        }
-        catch
-        {
-            // Ignore
-        }
-        _cts.Dispose();
+        if (!_disposed) { _disposed = true; _eventChannel.Writer.TryComplete(); }
+        await _writerTask.ConfigureAwait(false);
+        // Return pooled native handles for this database even when storage failed.
+        using (var connection = new SqliteConnection(_connectionString))
+            SqliteConnection.ClearPool(connection);
+        if (_writeError != null) throw new IOException("Không lưu được toàn bộ dữ liệu.", _writeError);
     }
+
 }
 
 public record RoundSummaryRecord(

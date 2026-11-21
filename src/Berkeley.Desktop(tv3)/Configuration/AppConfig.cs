@@ -13,7 +13,7 @@ public sealed class AppConfig
     public NodeConfig Node { get; set; } = CreateDefaultNodeConfig("Node1", 5001);
     public bool AutoStartOnLaunch { get; set; } = true;
     public bool UseSimulatedCluster { get; set; } = true;
-    public bool AutoSyncEnabled { get; set; } = false;
+    public bool AutoSyncEnabled { get; set; } = true;
     public int AutoSyncIntervalSeconds { get; set; } = 30;
 
     /// <summary>
@@ -103,7 +103,7 @@ public sealed class AppConfig
     /// </summary>
     public static List<string> GetLocalIPv4Addresses()
     {
-        var list = new List<string> { "0.0.0.0 (Mọi card mạng)", "127.0.0.1 (Localhost)" };
+        var list = new List<string> { "0.0.0.0", "127.0.0.1" };
         try
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());

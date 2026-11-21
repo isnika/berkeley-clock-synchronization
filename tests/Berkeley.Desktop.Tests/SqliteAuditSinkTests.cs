@@ -49,6 +49,25 @@ public class SqliteAuditSinkTests
     }
 
     [TestMethod]
+    public async Task BurstAudit_FlushPersistsAllRecordsInOrderAndDisposeReleasesFile()
+    {
+        var sink = new SqliteAuditSink(_dbPath);
+        try
+        {
+            for (int i = 1; i <= 4000; i++)
+                sink.Record(new(i, DateTimeOffset.UtcNow, i, "Node1", AuditEventKind.MessageReceived, "burst " + i));
+            await sink.FlushAsync();
+            var events = await sink.GetRecentEventsAsync(5000);
+            Assert.AreEqual(4000, events.Count);
+            CollectionAssert.AreEqual(Enumerable.Range(1, 4000).Select(i => (long)i).Reverse().ToArray(),
+                events.Select(e => e.Sequence).ToArray());
+        }
+        finally { await sink.DisposeAsync(); }
+        using var exclusive = new FileStream(_dbPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        Assert.IsTrue(exclusive.Length > 0);
+    }
+
+    [TestMethod]
     public async Task SqliteAuditSink_CanRecordRoundSummary()
     {
         await using var sink = new SqliteAuditSink(_dbPath);

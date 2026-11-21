@@ -130,6 +130,7 @@ public class WorkerSyncHandlerTests
             leaderSessionId: 1
         );
 
+        PrimeMeasurement(adjustMsg);
         _transport.SimulateReceive(adjustMsg);
 
         // Kiểm tra đồng hồ đã được cập nhật
@@ -167,6 +168,7 @@ public class WorkerSyncHandlerTests
             messageId: msgId
         );
 
+        PrimeMeasurement(adjustMsg);
         // Lần 1: Thành công
         _transport.SimulateReceive(adjustMsg);
         Assert.AreEqual(100_500L, _clock.ReadUtcMs());
@@ -185,13 +187,8 @@ public class WorkerSyncHandlerTests
     }
 
     [TestMethod]
-    [Description(
-        "Worker nhận ADJUST có SentAtUtcMs cũ (age > MaxAgeMs tính theo UTC Worker) " +
-        "-> Vẫn áp dụng vì Worker không so sánh UTC cross-machine. " +
-        "Lý do: Worker.nowUtc - Master.SentAt sẽ bị sai khi đồng hồ 2 máy lệch nhau, " +
-        "đây chính là điều Berkeley đang cố sửa. " +
-        "Bảo vệ chống replay đã có qua idempotency (MessageId) + session validation.")]
-    public void HandleAdjust_ExpiredByUTC_StillApplied_BecauseSessionValidationSuffices()
+    [Description("Worker nhận ADJUST hết hạn theo monotonic cục bộ -> Rejected, bất kể UTC hai máy")]
+    public void HandleAdjust_Expired_Rejected()
     {
         _clock.SetUtcMs(100_000);
 
@@ -200,22 +197,119 @@ public class WorkerSyncHandlerTests
             sourceNodeId: "Master1",
             sourceBootId: Guid.NewGuid(),
             targetNodeId: "Worker1",
-            // SentAt cách đây 10,000ms (theo UTC Worker), MaxAge chỉ 3,000ms
-            // -> nếu kiểm tra age cross-machine sẽ Reject — nhưng ta KHÔNG làm vậy
+            // Expiry is measured locally from TIME_REQUEST, regardless of UTC.
             payload: new AdjustPayload(AdjustmentMs: 500, SentAtUtcMs: 90_000, MaxAgeMs: 3000),
             roundId: "round-1",
             leaderSessionId: 1
         );
 
+        PrimeMeasurement(adjustMsg);
+        _clock.AdvanceMonotonic(3001);
         _transport.SimulateReceive(adjustMsg);
 
-        // Lệnh vẫn được áp dụng — đồng hồ tăng 500ms
-        Assert.AreEqual(100_500L, _clock.ReadUtcMs());
+        // Đồng hồ không đổi
+        Assert.AreEqual(100_000L, _clock.ReadUtcMs());
 
         Assert.AreEqual(1, _transport.SentMessages.Count);
         var payload = _transport.SentMessages[0].Message.DeserializePayload<AdjustResultPayload>();
         Assert.IsNotNull(payload);
-        Assert.AreEqual(AdjustmentStatus.Applied, payload.Result.Status);
+        Assert.AreEqual(AdjustmentStatus.Rejected, payload.Result.Status);
+    }
+
+    private void PrimeMeasurement(MessageEnvelope adjust)
+    {
+        _transport.SimulateReceive(MessageEnvelope.Create(MessageTypes.TimeRequest,
+            adjust.SourceNodeId, adjust.SourceBootId, "Worker1", new TimeRequestPayload(100_000),
+            adjust.RoundId, adjust.LeaderSessionId));
+        _transport.SentMessages.Clear();
+    }
+
+    [TestMethod]
+    [Description("Ca sửa TV1: UTC Worker - SentAt Master vượt MaxAge nhưng lệnh còn hạn cục bộ -> Applied")]
+    public void HandleAdjust_ExpiredByUtcWithFreshLocalLease_StillApplied()
+    {
+        _clock.SetUtcMs(100_000);
+        var adjust = MessageEnvelope.Create(MessageTypes.Adjust, "Master1", Guid.NewGuid(), "Worker1",
+            new AdjustPayload(500, SentAtUtcMs: 90_000, MaxAgeMs: 3000), "round-tv1", 1);
+
+        PrimeMeasurement(adjust);
+        _transport.SimulateReceive(adjust);
+
+        Assert.AreEqual(100_500L, _clock.ReadUtcMs());
+        Assert.AreEqual(1, _clock.ApplyHistory.Count);
+        Assert.AreEqual(AdjustmentStatus.Applied,
+            _transport.SentMessages.Single().Message.DeserializePayload<AdjustResultPayload>()!.Result.Status);
+    }
+
+    [DataTestMethod]
+    [DataRow(3000, 3000, AdjustmentStatus.Applied)]
+    [DataRow(3000, 3001, AdjustmentStatus.Rejected)]
+    [DataRow(20000, 10000, AdjustmentStatus.Applied)]
+    [DataRow(20000, 10001, AdjustmentStatus.Rejected)]
+    public void HandleAdjust_LocalExpiryHonorsBothPayloadAndConfiguredLimit(int maxAgeMs, int elapsedMs, AdjustmentStatus expected)
+    {
+        var adjust = MessageEnvelope.Create(MessageTypes.Adjust, "Master1", Guid.NewGuid(), "Worker1",
+            new AdjustPayload(500, SentAtUtcMs: 0, MaxAgeMs: maxAgeMs), "round-expiry-limit", 1);
+        PrimeMeasurement(adjust);
+        _clock.AdvanceMonotonic(elapsedMs);
+        _transport.SimulateReceive(adjust);
+
+        Assert.AreEqual(expected,
+            _transport.SentMessages.Single().Message.DeserializePayload<AdjustResultPayload>()!.Result.Status);
+        Assert.AreEqual(expected == AdjustmentStatus.Applied ? 1 : 0, _clock.ApplyHistory.Count);
+    }
+
+    [DataTestMethod]
+    [DataRow(120_000L)]
+    [DataRow(-180_000L)]
+    public void FreshAdjust_WithLargeClockSkew_Applies(long skewMs)
+    {
+        _clock.SetUtcMs(1_000_000 + skewMs);
+        var adjust = MessageEnvelope.Create(MessageTypes.Adjust, "Master1", Guid.NewGuid(), "Worker1",
+            new AdjustPayload(-skewMs, 1_000_000, 5000), "round-skew", 1);
+        PrimeMeasurement(adjust);
+        // A wall-clock jump must not change the age of the local lease.
+        _clock.SetUtcMs(2_000_000 + skewMs);
+        _clock.AdvanceMonotonic(100);
+        _transport.SimulateReceive(adjust);
+        Assert.AreEqual(AdjustmentStatus.Applied, _transport.SentMessages.Single().Message.DeserializePayload<AdjustResultPayload>()!.Result.Status);
+        Assert.AreEqual(2_000_000L, _clock.ReadUtcMs());
+    }
+
+    [DataTestMethod]
+    [DataRow("missing")]
+    [DataRow("round")]
+    [DataRow("boot")]
+    [DataRow("session")]
+    [DataRow("no-session")]
+    public void Adjust_WithoutMatchingMeasurement_DoesNotStep(string mismatch)
+    {
+        var adjust = MessageEnvelope.Create(MessageTypes.Adjust, "Master1", Guid.NewGuid(), "Worker1",
+            new AdjustPayload(500, 50_000, 5000), "round-1", 1);
+        if (mismatch != "missing") PrimeMeasurement(adjust);
+        adjust = mismatch switch
+        {
+            "round" => adjust with { RoundId = "other-round" },
+            "boot" => adjust with { SourceBootId = Guid.NewGuid() },
+            "session" => adjust with { LeaderSessionId = 2 },
+            "no-session" => adjust with { LeaderSessionId = null },
+            _ => adjust
+        };
+        _transport.SimulateReceive(adjust);
+        Assert.AreEqual(0, _clock.ApplyHistory.Count);
+    }
+
+    [TestMethod]
+    public void RepeatedTimeRequest_DoesNotRenewExpiredLease()
+    {
+        var adjust = MessageEnvelope.Create(MessageTypes.Adjust, "Master1", Guid.NewGuid(), "Worker1",
+            new AdjustPayload(500, 50_000, 5000), "round-1", 1);
+        PrimeMeasurement(adjust);
+        _clock.AdvanceMonotonic(5001);
+        PrimeMeasurement(adjust);
+        _transport.SimulateReceive(adjust);
+        Assert.AreEqual(0, _clock.ApplyHistory.Count);
+        Assert.AreEqual(AdjustmentStatus.Rejected, _transport.SentMessages.Single().Message.DeserializePayload<AdjustResultPayload>()!.Result.Status);
     }
 }
 

@@ -173,6 +173,193 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="CaretBrush" Value="#38BDF8" />
         </Style>
+
+        <!-- Dark ComboBox Toggle Button Template -->
+        <ControlTemplate x:Key="DarkComboBoxToggleButtonTemplate" TargetType="{x:Type ToggleButton}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition />
+                    <ColumnDefinition Width="28" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="border" Grid.ColumnSpan="2" CornerRadius="6"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}" />
+                <Path x:Name="arrow" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Fill="#94A3B8" Data="M 0 0 L 4 4 L 8 0 Z" SnapsToDevicePixels="True"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="border" Property="BorderBrush" Value="#38BDF8" />
+                    <Setter TargetName="arrow" Property="Fill" Value="#38BDF8" />
+                </Trigger>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter TargetName="border" Property="BorderBrush" Value="#38BDF8" />
+                    <Setter TargetName="arrow" Property="Fill" Value="#38BDF8" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter TargetName="border" Property="Background" Value="#1E293B" />
+                    <Setter TargetName="border" Property="BorderBrush" Value="#334155" />
+                    <Setter TargetName="arrow" Property="Fill" Value="#475569" />
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <!-- Dark ComboBox Style -->
+        <Style x:Key="DarkComboBox" TargetType="{x:Type ComboBox}">
+            <Setter Property="Background" Value="#0F172A" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="BorderBrush" Value="#334155" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBox}">
+                        <Grid>
+                            <ToggleButton x:Name="toggleButton"
+                                          Template="{StaticResource DarkComboBoxToggleButtonTemplate}"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ClickMode="Press" />
+                            <ContentPresenter x:Name="contentPresenter"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                              Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left" />
+                            <Popup x:Name="PART_Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Slide">
+                                <Grid x:Name="dropDown" MinWidth="{TemplateBinding ActualWidth}" MaxHeight="{TemplateBinding MaxDropDownHeight}" SnapsToDevicePixels="True">
+                                    <Border x:Name="dropDownBorder"
+                                            Background="#1E293B"
+                                            BorderBrush="#334155"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Margin="0,2,0,4"
+                                            Padding="2">
+                                        <ScrollViewer SnapsToDevicePixels="True">
+                                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="dropDownBorder" Property="MinHeight" Value="50" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#64748B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Dark ComboBoxItem Style -->
+        <Style TargetType="{x:Type ComboBoxItem}">
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                        <Border x:Name="itemBorder" Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4" Margin="2,1">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="itemBorder" Property="Background" Value="#0284C7" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="itemBorder" Property="Background" Value="#0369A1" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#64748B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Dark DataGrid Row Style -->
+        <Style TargetType="{x:Type DataGridRow}">
+            <Setter Property="Background" Value="#1E293B" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#334155" />
+                    <Setter Property="Foreground" Value="#FFFFFF" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#0284C7" />
+                    <Setter Property="Foreground" Value="#FFFFFF" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Dark DataGrid Cell Style -->
+        <Style TargetType="{x:Type DataGridCell}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Foreground}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type DataGridCell}">
+                        <Border Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="Foreground" Value="#FFFFFF" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- DataGrid Text Column Editing Style -->
+        <Style x:Key="DarkDataGridTextEditStyle" TargetType="{x:Type TextBox}" BasedOn="{StaticResource DarkTextBox}">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#38BDF8" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Background" Value="#0F172A" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -217,7 +404,7 @@
                 <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" Padding="16,5">
                         <StackPanel HorizontalAlignment="Center">
-                            <TextBlock Text="ĐỒNG HỒ WINDOWS THẬT (SetSystemTime)" FontSize="9" FontWeight="Bold" Foreground="#94A3B8" HorizontalAlignment="Center"/>
+                            <TextBlock Text="ĐỒNG HỒ ĐANG SỬ DỤNG" FontSize="9" FontWeight="Bold" Foreground="#94A3B8" HorizontalAlignment="Center"/>
                             <TextBlock Text="{Binding LocalTimeDisplay}" 
                                        FontFamily="Consolas, Cascadia Code, Courier New" 
                                        FontSize="26" FontWeight="Bold" Foreground="#F8FAFC" HorizontalAlignment="Center"/>
@@ -241,6 +428,8 @@
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Chỉnh lệch để Demo:" FontSize="9" Foreground="#94A3B8" Margin="2,0,0,2"/>
                             <StackPanel Orientation="Horizontal">
+                                <Button Content="Khởi động" Command="{Binding StartNodeCommand}" Style="{StaticResource QuickDriftButton}"/>
+                                <Button Content="Dừng" Command="{Binding StopNodeCommand}" Style="{StaticResource QuickDriftButton}"/>
                                 <Button Content="+2 Phút" Style="{StaticResource QuickDriftButton}" Command="{Binding QuickDriftCommand}" CommandParameter="2"/>
                                 <Button Content="-1 Phút" Style="{StaticResource QuickDriftButton}" Command="{Binding QuickDriftCommand}" CommandParameter="-1"/>
                                 <Button Content="-3 Phút" Style="{StaticResource QuickDriftButton}" Command="{Binding QuickDriftCommand}" CommandParameter="-3"/>
@@ -554,8 +743,20 @@
                                         <DataGridTextColumn Header="RTT (r_i)" Binding="{Binding RttText}" Width="65"/>
                                         <DataGridTextColumn Header="Offset (d_i)" Binding="{Binding OffsetText}" FontWeight="SemiBold" Width="75"/>
                                         <DataGridTextColumn Header="Lệnh Step (a_i)" Binding="{Binding AdjustmentText}" FontWeight="Bold" Width="85"/>
-                                        <DataGridTextColumn Header="Trạng thái" Binding="{Binding Status}" Width="90"/>
-                                        <DataGridTextColumn Header="Kết quả Step" Binding="{Binding StepResultText}" Width="95"/>
+                                        <DataGridTemplateColumn Header="Trạng thái" Width="90">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="Kết quả Step" Width="95">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding StepResultText}" Foreground="{Binding StepResultBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="Ghi chú" Binding="{Binding Note}" Width="*"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
@@ -677,17 +878,17 @@
                                 <TextBlock Text="1. THÔNG TIN MÁY NÀY (LOCAL NODE)" FontWeight="Bold" FontSize="13" Foreground="#38BDF8" Margin="0,0,0,10"/>
 
                                 <TextBlock Text="Node ID (Định danh máy, ví dụ: Node1, Node2...):" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,3"/>
-                                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ConfigNodeId}" Margin="0,0,0,8"/>
+                                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ConfigNodeId, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Margin="0,0,0,8"/>
 
                                 <TextBlock Text="Tên hiển thị trạm:" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,3"/>
-                                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ConfigDisplayName}" Margin="0,0,0,8"/>
+                                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ConfigDisplayName, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Margin="0,0,0,8"/>
 
                                 <TextBlock Text="Địa chỉ IP lắng nghe (Wi-Fi/LAN của máy này):" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,3"/>
-                                <ComboBox Background="#0F172A" Foreground="#F8FAFC" BorderBrush="#334155" Padding="6,4" Margin="0,0,0,8"
+                                <ComboBox Style="{StaticResource DarkComboBox}" Margin="0,0,0,8"
                                           ItemsSource="{Binding AvailableIpAddresses}" SelectedItem="{Binding ConfigListenAddress}"/>
 
                                 <TextBlock Text="Cổng TCP Lắng nghe:" FontSize="11" Foreground="#94A3B8" Margin="0,0,0,3"/>
-                                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ConfigListenPort}" Margin="0,0,0,8"/>
+                                <TextBox Style="{StaticResource DarkTextBox}" Text="{Binding ConfigListenPort, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Margin="0,0,0,8"/>
 
                                 <!-- Toggle Chế độ Mạng Thật vs Giả lập -->
                                 <Border Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,4,0,0">
@@ -707,28 +908,28 @@
                                 <TextBlock Text="2. THAM SỐ VẬN HÀNH &amp; NGHIỆM THU" FontWeight="Bold" FontSize="13" Foreground="#F59E0B" Margin="0,0,0,10"/>
 
                                 <Grid Margin="0,0,0,6">
-                                    <TextBlock Text="Ngưỡng sai số nghiệm thu (giây):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
-                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigAcceptanceThresholdSeconds}"/>
+                                    <TextBlock Text="Ngưỡng sai số cấu hình (giây):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigAcceptanceThresholdSeconds, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}"/>
                                 </Grid>
 
                                 <Grid Margin="0,0,0,6">
                                     <TextBlock Text="Heartbeat Interval (ms):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
-                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigHeartbeatIntervalMs}"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigHeartbeatIntervalMs, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}"/>
                                 </Grid>
 
                                 <Grid Margin="0,0,0,6">
                                     <TextBlock Text="Heartbeat Timeout (ms):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
-                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigHeartbeatTimeoutMs}"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigHeartbeatTimeoutMs, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}"/>
                                 </Grid>
 
                                 <Grid Margin="0,0,0,6">
                                     <TextBlock Text="Bully Election Timeout (ms):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
-                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigElectionTimeoutMs}"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigElectionTimeoutMs, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}"/>
                                 </Grid>
 
                                 <Grid Margin="0,0,0,6">
                                     <TextBlock Text="Sample Round Timeout (ms):" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
-                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigRoundTimeoutMs}"/>
+                                    <TextBox HorizontalAlignment="Right" Width="80" Style="{StaticResource DarkTextBox}" Text="{Binding ConfigRoundTimeoutMs, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -756,28 +957,43 @@
                             <DataGrid Grid.Row="1" ItemsSource="{Binding ConfigPeers}"
                                       AutoGenerateColumns="False" CanUserAddRows="False"
                                       Background="#0F172A" BorderBrush="#334155" BorderThickness="1"
-                                      HeadersVisibility="Column" Foreground="#F8FAFC" FontSize="12">
+                                      RowBackground="#1E293B" AlternatingRowBackground="#162032"
+                                      GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#334155"
+                                      HeadersVisibility="Column" Foreground="#F8FAFC" FontSize="12"
+                                      RowHeight="36">
+                                <DataGrid.Resources>
+                                    <Style TargetType="{x:Type TextBox}" BasedOn="{StaticResource DarkDataGridTextEditStyle}"/>
+                                </DataGrid.Resources>
                                 <DataGrid.ColumnHeaderStyle>
                                     <Style TargetType="DataGridColumnHeader">
-                                        <Setter Property="Background" Value="#1E293B"/>
+                                        <Setter Property="Background" Value="#0F172A"/>
                                         <Setter Property="Foreground" Value="#94A3B8"/>
                                         <Setter Property="FontWeight" Value="SemiBold"/>
-                                        <Setter Property="Padding" Value="8,6"/>
+                                        <Setter Property="Padding" Value="10,8"/>
                                         <Setter Property="BorderThickness" Value="0,0,0,1"/>
                                         <Setter Property="BorderBrush" Value="#334155"/>
                                     </Style>
                                 </DataGrid.ColumnHeaderStyle>
 
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Node ID" Binding="{Binding NodeId, UpdateSourceTrigger=PropertyChanged}" Width="120"/>
-                                    <DataGridTextColumn Header="Địa chỉ IP (LAN/Wi-Fi)" Binding="{Binding Address, UpdateSourceTrigger=PropertyChanged}" Width="200"/>
-                                    <DataGridTextColumn Header="Cổng TCP" Binding="{Binding Port, UpdateSourceTrigger=PropertyChanged}" Width="100"/>
+                                    <DataGridTextColumn Header="Node ID" Binding="{Binding NodeId, UpdateSourceTrigger=PropertyChanged}" Width="120"
+                                                        EditingElementStyle="{StaticResource DarkDataGridTextEditStyle}"/>
+                                    <DataGridTextColumn Header="Địa chỉ IP (LAN/Wi-Fi)" Binding="{Binding Address, UpdateSourceTrigger=PropertyChanged}" Width="200"
+                                                        EditingElementStyle="{StaticResource DarkDataGridTextEditStyle}"/>
+                                    <DataGridTextColumn Header="Cổng TCP" Binding="{Binding Port, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True, NotifyOnValidationError=True}" Width="100"
+                                                        EditingElementStyle="{StaticResource DarkDataGridTextEditStyle}"/>
                                     <DataGridTemplateColumn Header="Thao tác" Width="100">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
-                                                <Button Content="🗑️ Xóa" Background="#7F1D1D" Foreground="#FCA5A5" BorderThickness="0" Padding="6,2" Cursor="Hand"
+                                                <Button Content="🗑️ Xóa" Background="#7F1D1D" Foreground="#FCA5A5" BorderThickness="0" Padding="8,4" Cursor="Hand"
                                                         Command="{Binding DataContext.RemoveConfigPeerCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                        CommandParameter="{Binding}"/>
+                                                        CommandParameter="{Binding}">
+                                                    <Button.Resources>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="CornerRadius" Value="4"/>
+                                                        </Style>
+                                                    </Button.Resources>
+                                                </Button>
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
@@ -826,7 +1042,9 @@
                               AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                               Background="Transparent" BorderThickness="0"
                               RowBackground="#1E293B" AlternatingRowBackground="#162032"
-                              HeadersVisibility="Column" Foreground="#F8FAFC" FontSize="11">
+                              GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#334155"
+                              HeadersVisibility="Column" Foreground="#F8FAFC" FontSize="11"
+                              RowHeight="32">
                         <DataGrid.ColumnHeaderStyle>
                             <Style TargetType="DataGridColumnHeader">
                                 <Setter Property="Background" Value="#0F172A"/>

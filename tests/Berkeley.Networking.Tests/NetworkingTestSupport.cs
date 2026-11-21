@@ -50,6 +50,7 @@ internal sealed class RecordingTransport : INetworkTransport
     public List<MessageEnvelope> Broadcasts { get; } = [];
     public IReadOnlyList<string> ConnectedNodeIds { get; set; } = [];
     public bool SendResult { get; set; } = true;
+    public Action<MessageEnvelope>? OnBroadcast { get; set; }
 
     public event Action<MessageEnvelope>? MessageReceived;
 
@@ -65,6 +66,7 @@ internal sealed class RecordingTransport : INetworkTransport
     public Task BroadcastAsync(MessageEnvelope message, CancellationToken ct = default)
     {
         Broadcasts.Add(message);
+        OnBroadcast?.Invoke(message);
         return Task.CompletedTask;
     }
 

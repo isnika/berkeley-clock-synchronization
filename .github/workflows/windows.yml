@@ -1,0 +1,28 @@
+name: Windows build and test
+on: [push, pull_request]
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      AVALONIA_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore BerkeleyTimeSync.sln
+      - run: dotnet build BerkeleyTimeSync.sln -c Release --no-restore
+      - run: dotnet test BerkeleyTimeSync.sln -c Release --no-build --logger trx
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-results
+          path: tests/**/TestResults/*.trx
+          if-no-files-found: ignore
+      - run: ./scripts/publish.ps1
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BerkeleyTimeSync-win-x64
+          path: artifacts/release/*.zip

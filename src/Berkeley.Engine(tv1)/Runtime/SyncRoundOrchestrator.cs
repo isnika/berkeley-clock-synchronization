@@ -142,6 +142,7 @@ public sealed class SyncRoundOrchestrator : IDisposable
             // BƯỚC 3: GỬI LỆNH HIỆU CHỈNH
             _state = RoundState.Adjusting;
             var adjustResults = await AdjustPhaseAsync(result, _roundCts.Token);
+            _roundCts.Token.ThrowIfCancellationRequested();
 
             // Master tự chỉnh giờ của mình
             var masterResult = _clock.ApplyStep(
@@ -154,11 +155,11 @@ public sealed class SyncRoundOrchestrator : IDisposable
 
             // BƯỚC 4: ĐO LẠI để kiểm tra spread sau hiệu chỉnh
             _state = RoundState.Verifying;
-            double? spread = await RemeasurePhaseAsync(_roundCts.Token);
+            double? spread = await RemeasurePhaseAsync(validSamples.Select(s => s.WorkerNodeId).ToList(), _roundCts.Token);
+            _roundCts.Token.ThrowIfCancellationRequested();
 
-            _state = RoundState.Idle;
-
-            var outcome = adjustResults.All(r => r.Status == AdjustmentStatus.Applied)
+            var outcome = rejectedSamples.Count == 0 && spread.HasValue &&
+                adjustResults.All(r => r.Status == AdjustmentStatus.Applied)
                 ? RoundOutcome.Success
                 : RoundOutcome.PartialSuccess;
 
@@ -173,7 +174,6 @@ public sealed class SyncRoundOrchestrator : IDisposable
         }
         catch (OperationCanceledException)
         {
-            _state = RoundState.Idle;
             return BuildSummary(roundStarted, [], RoundOutcome.Cancelled);
         }
         finally
@@ -183,6 +183,9 @@ public sealed class SyncRoundOrchestrator : IDisposable
             CancelPendingRemeasure();
             _roundCts?.Dispose();
             _roundCts = null;
+            // Every exit (including no valid samples or an unexpected failure)
+            // must allow a subsequent round, after pending work is cleaned up.
+            _state = RoundState.Idle;
         }
     }
 
@@ -459,9 +462,9 @@ public sealed class SyncRoundOrchestrator : IDisposable
 
     // ── Phase 3: Đo lại spread sau hiệu chỉnh [A6] ───────────────────────
 
-    private async Task<double?> RemeasurePhaseAsync(CancellationToken ct)
+    private async Task<double?> RemeasurePhaseAsync(IReadOnlyList<string> peers, CancellationToken ct)
     {
-        var peers = _transport.GetConnectedNodeIds();
+        // Preserve the measured participants even if a Worker just disconnected.
         if (peers.Count == 0) return null;
 
         int timeoutMs = _config.OperationParams.SampleTimeoutMs;
@@ -497,11 +500,9 @@ public sealed class SyncRoundOrchestrator : IDisposable
         catch (OperationCanceledException) { /* timeout — thu kết quả có được */ }
 
         // Thu các offset đo lại được (chỉ Valid)
-        // LỖI ĐÃ SỬA: Thêm Master vào tập spread với offset = 0.
-        // Master là điểm tham chiếu của thuật toán Berkeley — spread phải đo khoảng cách
-        // giữa TẤT CẢ các node kể cả Master. Nếu bỏ Master, khi chỉ có 1 Worker trả lời
-        // thì spread luôn = 0 dù Worker còn lệch, vì spread = max([x]) - min([x]) = 0.
-        var offsets = new List<double> { 0.0 }; // 0.0 = offset của Master so với chính nó
+        // TV1 fix: include Master as the zero-offset reference. With one Worker,
+        // max([worker]) - min([worker]) would incorrectly report zero residual.
+        var offsets = new List<double> { 0.0 };
         lock (_pendingRemeasureLock)
         {
             foreach (var tcs in _pendingRemeasure.Values)
@@ -512,7 +513,9 @@ public sealed class SyncRoundOrchestrator : IDisposable
             _pendingRemeasure.Clear();
         }
 
-        if (offsets.Count == 0) return null;
+        // A subset cannot verify the round. Missing/invalid Workers must not
+        // yield a reassuring spread based only on the remaining responses.
+        if (offsets.Count != peers.Count + 1) return null;
 
         double spread = BerkeleyCalculator.ComputeSpread(offsets);
         return spread;

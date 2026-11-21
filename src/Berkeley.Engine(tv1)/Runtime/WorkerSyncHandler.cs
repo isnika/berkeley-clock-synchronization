@@ -29,6 +29,10 @@ public sealed class WorkerSyncHandler : IDisposable
     private readonly Queue<Guid> _processedQueue = [];
     private const int MaxProcessedIds = 1000;
 
+    // One bounded round lease, timed only by this Worker's monotonic clock.
+    private readonly object _measurementLock = new();
+    private (string? RoundId, long? SessionId, Guid BootId, long ReceivedAt)? _measurement;
+
     private bool _disposed;
 
     public WorkerSyncHandler(
@@ -92,6 +96,14 @@ public sealed class WorkerSyncHandler : IDisposable
             return;
         }
 
+        lock (_measurementLock)
+        {
+            // Repeated requests for the same round must not extend its lifetime.
+            if (_measurement is not { } previous || previous.RoundId != envelope.RoundId ||
+                previous.SessionId != envelope.LeaderSessionId || previous.BootId != envelope.SourceBootId)
+                _measurement = (envelope.RoundId, envelope.LeaderSessionId, envelope.SourceBootId, _clock.ReadMonotonicMs());
+        }
+
         // T3 đọc ngay trước khi gửi — sai số chủ yếu ở thời gian serialize TCP (nhỏ)
         long t3 = _clock.ReadUtcMs();
 
@@ -139,12 +151,35 @@ public sealed class WorkerSyncHandler : IDisposable
             return;
         }
 
-        // [A7] BỎ kiểm tra tuổi lệnh theo UTC cross-machine — LỖI ĐÃ SỬA
-        // Lý do: ageMs = nowUtcMs(Worker) - SentAtUtcMs(Master) so sánh giờ UTC của 2 máy khác nhau.
-        // Khi đồng hồ Worker lệch so với Master (ví dụ nhanh hơn 2 phút) thì ageMs tính ra
-        // ~120.000ms > MaxAgeMs(10.000ms) → Worker từ chối mọi lệnh ADJUST → Berkeley thất bại.
-        // Cơ chế bảo vệ đúng đắn đã có: idempotency (MessageId) + round/session validation.
+        // TV1 fix: never compare Worker UTC with Master SentAtUtcMs; the clocks
+        // may differ by minutes, which is exactly what Berkeley must correct.
+        // Keep the local monotonic measurement lease from the UI branch:
+        // session/idempotency alone cannot expire a delayed, previously unseen ADJUST.
+        // The lease must match this exact round/session/Master process (BootId).
         long nowUtcMs = _clock.ReadUtcMs();
+        long ageMs;
+        bool matchesMeasurement;
+        lock (_measurementLock)
+        {
+            matchesMeasurement = _measurement is { } m && m.RoundId == envelope.RoundId &&
+                m.SessionId == envelope.LeaderSessionId && m.BootId == envelope.SourceBootId;
+            ageMs = _measurement is { } measurement ? _clock.ReadMonotonicMs() - measurement.ReceivedAt : -1;
+        }
+        int maxAgeMs = Math.Min(payload.MaxAgeMs, _config.OperationParams.SampleMaxAgeMs);
+        if (!matchesMeasurement || ageMs < 0 || maxAgeMs <= 0 || ageMs > maxAgeMs)
+        {
+            _audit.Record(new AuditEvent(0, DateTimeOffset.UtcNow, _clock.ReadMonotonicMs(),
+                _config.NodeId, AuditEventKind.MessageRejected,
+                $"ADJUST rejected: missing/mismatched or expired measurement lease (age={ageMs}ms, limit={maxAgeMs}ms)"));
+
+            var staleResult = new AdjustmentResult(
+                _config.NodeId, envelope.RoundId!,
+                payload.AdjustmentMs, nowUtcMs, nowUtcMs,
+                AdjustmentStatus.Rejected, "ADJUST requires a matching, unexpired measurement lease");
+
+            SendAdjustResult(envelope, staleResult);
+            return;
+        }
 
         // [A7] Idempotency — nếu MessageId đã xử lý → báo Rejected (đã làm rồi)
         bool alreadyProcessed;
@@ -192,7 +227,7 @@ public sealed class WorkerSyncHandler : IDisposable
         _audit.Record(new AuditEvent(0, DateTimeOffset.UtcNow, _clock.ReadMonotonicMs(),
             _config.NodeId, auditKind,
             $"ApplyStep {payload.AdjustmentMs:+0.0;-0.0}ms → {result.Status}" +
-            (result.ErrorMessage != null ? $" ({result.ErrorMessage})" : "")));
+            (result.ErrorMessage != null ? $" ({result.ErrorMessage})" : ""), result));
 
         SendAdjustResult(envelope, result);
     }
@@ -250,8 +285,7 @@ public sealed class WorkerSyncHandler : IDisposable
             return false;
         }
 
-        if (envelope.LeaderSessionId.HasValue &&
-            envelope.LeaderSessionId.Value != leader.LeaderSessionId)
+        if (envelope.LeaderSessionId != leader.LeaderSessionId)
         {
             _audit.Record(new AuditEvent(0, DateTimeOffset.UtcNow, _clock.ReadMonotonicMs(),
                 _config.NodeId, AuditEventKind.MessageRejected,

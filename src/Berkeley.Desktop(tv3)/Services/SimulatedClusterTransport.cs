@@ -7,11 +7,14 @@ namespace Berkeley.Desktop.Services;
 /// Trình vận chuyển mạng giả lập cụm 6 máy cho phép chạy thử nghiệm và demo đầy đủ
 /// thuật toán Berkeley và thuật toán Bully ngay trên 1 máy tính mà không cần cắm dây LAN.
 /// </summary>
-public sealed class SimulatedClusterTransport : INetworkTransport
+public sealed class SimulatedClusterTransport : INetworkTransport, IDisposable
 {
     private readonly IClockReader _clock;
+    private readonly long _originUtc;
+    private readonly long _originMono;
+    private bool _disposed;
     private readonly IAuditSink _audit;
-    private readonly Dictionary<string, double> _simulatedDriftMs = new()
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> _simulatedDriftMs = new()
     {
         ["Node2"] = +120_000,  // +2 phút
         ["Node3"] = -45_000,   // -45 giây
@@ -22,9 +25,17 @@ public sealed class SimulatedClusterTransport : INetworkTransport
 
     public event Action<MessageEnvelope>? MessageReceived;
 
-    public SimulatedClusterTransport(IClockReader clock, IAuditSink audit)
+    public SimulatedClusterTransport(IClockReader clock, IAuditSink audit, NodeConfig? config = null)
     {
         _clock = clock;
+        _originUtc = clock.ReadUtcMs();
+        _originMono = clock.ReadMonotonicMs();
+        if (config != null)
+        {
+            var defaults = _simulatedDriftMs.ToDictionary(x => x.Key, x => x.Value);
+            _simulatedDriftMs.Clear();
+            foreach (var peer in config.Peers) _simulatedDriftMs[peer.NodeId] = defaults.GetValueOrDefault(peer.NodeId);
+        }
         _audit = audit;
     }
 
@@ -73,7 +84,8 @@ public sealed class SimulatedClusterTransport : INetworkTransport
         int delay = Random.Shared.Next(8, 20);
         await Task.Delay(delay);
 
-        long nowUtc = _clock.ReadUtcMs();
+        if (_disposed) return;
+        long nowUtc = _originUtc + _clock.ReadMonotonicMs() - _originMono;
         double drift = _simulatedDriftMs.GetValueOrDefault(peerId, 0);
 
         if (msg.MessageType == MessageTypes.TimeRequest)
@@ -154,6 +166,8 @@ public sealed class SimulatedClusterTransport : INetworkTransport
             _simulatedDriftMs[peerId] += deltaMs;
         }
     }
+
+    public void Dispose() { _disposed = true; MessageReceived = null; }
 
     public IReadOnlyDictionary<string, double> GetDrifts() => _simulatedDriftMs;
 }

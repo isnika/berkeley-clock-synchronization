@@ -95,7 +95,12 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
 
         try
         {
-            await RunElectionAsync(ct).ConfigureAwait(false);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
+            await RunElectionAsync(linked.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            // Service shutdown also cancels elections started by a caller.
         }
         finally
         {
@@ -138,15 +143,19 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
 
             if (higherNodes.Count == 0)
             {
-                await DeclareCoordinatorAsync(sessionId, ct).ConfigureAwait(false);
-                return;
+                if (await DeclareCoordinatorAsync(sessionId, ct).ConfigureAwait(false))
+                    return;
+                sessionId = NextSessionId();
+                continue;
             }
 
             bool receivedOk = await WaitForOkAsync(ct).ConfigureAwait(false);
             if (!receivedOk)
             {
-                await DeclareCoordinatorAsync(sessionId, ct).ConfigureAwait(false);
-                return;
+                if (await DeclareCoordinatorAsync(sessionId, ct).ConfigureAwait(false))
+                    return;
+                sessionId = NextSessionId();
+                continue;
             }
 
             bool receivedCoordinator = await WaitForCoordinatorAsync(ct).ConfigureAwait(false);
@@ -214,22 +223,31 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
         }
     }
 
-    private async Task DeclareCoordinatorAsync(long sessionId, CancellationToken ct)
+    private async Task<bool> DeclareCoordinatorAsync(long sessionId, CancellationToken ct)
     {
         var leader = new LeaderSession(_currentNodeId, sessionId);
-        SetLeaderIfNewer(leader);
+        // A newer term may have arrived while waiting for OK. Never broadcast
+        // a declaration that this node itself could not accept.
+        if (!SetLeaderIfNewer(leader))
+            return false;
 
+        await SendCoordinatorAsync(leader, ct).ConfigureAwait(false);
+        RecordAudit(AuditEventKind.LeaderChanged,
+            $"[BULLY] {_currentNodeId} declared COORDINATOR session {sessionId}");
+        return true;
+    }
+
+    private Task SendCoordinatorAsync(LeaderSession leader, CancellationToken ct)
+    {
         var coordinator = MessageEnvelope.Create(
             messageType: MessageTypes.Coordinator,
             sourceNodeId: _currentNodeId,
             sourceBootId: _bootId,
             targetNodeId: "*",
-            payload: new ElectionPayload(_currentNodeId, sessionId),
-            leaderSessionId: sessionId);
+            payload: new ElectionPayload(_currentNodeId, leader.LeaderSessionId),
+            leaderSessionId: leader.LeaderSessionId);
 
-        await _transport.BroadcastAsync(coordinator, ct).ConfigureAwait(false);
-        RecordAudit(AuditEventKind.LeaderChanged,
-            $"[BULLY] {_currentNodeId} declared COORDINATOR session {sessionId}");
+        return _transport.BroadcastAsync(coordinator, ct);
     }
 
     private void OnMessageReceived(MessageEnvelope message)
@@ -261,8 +279,15 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
 
         var payload = message.DeserializePayload<ElectionPayload>();
         long? sessionId = message.LeaderSessionId ?? payload?.LeaderSessionId;
-        if (!sessionId.HasValue)
+        if (sessionId is null or <= 0 || payload is null ||
+            !string.Equals(payload.CandidateNodeId, message.SourceNodeId, StringComparison.OrdinalIgnoreCase) ||
+            (payload.LeaderSessionId.HasValue && payload.LeaderSessionId != sessionId))
             return;
+
+        // The recovering higher-priority node must campaign above the term
+        // carried by the surviving node, even if its local counter reset.
+        lock (_stateLock)
+            _lastSessionId = Math.Max(_lastSessionId, sessionId.Value);
 
         var ok = MessageEnvelope.Create(
             messageType: MessageTypes.Ok,
@@ -312,7 +337,8 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
         string leaderNodeId = payload?.CandidateNodeId ?? message.SourceNodeId;
         long? sessionId = message.LeaderSessionId ?? payload?.LeaderSessionId;
 
-        if (!sessionId.HasValue ||
+        if (sessionId is null or <= 0 ||
+            (payload?.LeaderSessionId.HasValue == true && payload.LeaderSessionId != sessionId) ||
             !string.Equals(leaderNodeId, message.SourceNodeId, StringComparison.OrdinalIgnoreCase) ||
             !IsKnownPeer(leaderNodeId))
         {
@@ -320,23 +346,23 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
         }
 
         var leader = new LeaderSession(leaderNodeId, sessionId.Value);
-        if (SetLeaderIfNewer(leader))
+        SetLeaderIfNewer(leader);
+        bool isCurrent;
+        lock (_stateLock)
+            isCurrent = _currentLeader == leader && leader.LeaderSessionId >= _lastSessionId;
+        if (isCurrent)
         {
+            if (IsHigherPriority(_currentNodeId, leaderNodeId))
+            {
+                // First learn the survivor's term, then reclaim leadership
+                // through Bully in a strictly newer term.
+                _ = StartElectionAsync(_cts.Token);
+                return;
+            }
             lock (_stateLock)
             {
                 _okReceived?.TrySetResult(true);
                 _coordinatorReceived?.TrySetResult(leader);
-            }
-        }
-        else
-        {
-            lock (_stateLock)
-            {
-                if (_currentLeader == leader)
-                {
-                    _okReceived?.TrySetResult(true);
-                    _coordinatorReceived?.TrySetResult(leader);
-                }
             }
         }
     }
@@ -347,6 +373,8 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
         lock (_stateLock)
         {
             previous = _currentLeader;
+            if (leader.LeaderSessionId < _lastSessionId)
+                return false;
             if (previous is not null)
             {
                 if (leader.LeaderSessionId < previous.LeaderSessionId)
@@ -410,12 +438,22 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
             {
                 await Task.Delay(intervalMs, _cts.Token).ConfigureAwait(false);
                 var leader = CurrentLeader;
-                if (leader is null ||
-                    string.Equals(leader.MasterNodeId, _currentNodeId, StringComparison.OrdinalIgnoreCase) ||
-                    _liveness is null)
+                if (leader is null)
                 {
                     continue;
                 }
+
+                // Replay the current authority periodically. Heartbeat alone
+                // proves liveness, not agreement, and a one-shot declaration
+                // is lost when a peer is offline or a frame is dropped.
+                if (string.Equals(leader.MasterNodeId, _currentNodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsElecting)
+                        await SendCoordinatorAsync(leader, _cts.Token).ConfigureAwait(false);
+                    continue;
+                }
+                if (_liveness is null)
+                    continue;
 
                 if (_liveness.GetPeerConnectionState(leader.MasterNodeId) == PeerConnectionState.Disconnected)
                     _ = StartElectionAsync(_cts.Token);
@@ -423,6 +461,10 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
             catch (OperationCanceledException) when (_cts.IsCancellationRequested)
             {
                 break;
+            }
+            catch (Exception ex)
+            {
+                RecordAudit(AuditEventKind.SendError, $"Coordinator reconciliation failed: {ex.Message}");
             }
         }
     }
@@ -486,17 +528,7 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
 
     public void Dispose()
     {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        _transport.MessageReceived -= OnMessageReceived;
-        if (_liveness is not null)
-            _liveness.PeerConnectionChanged -= OnPeerConnectionChanged;
-        _cts.Cancel();
-        _electionGate.Dispose();
-        _cts.Dispose();
-        GC.SuppressFinalize(this);
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 
     public async ValueTask DisposeAsync()
@@ -522,6 +554,8 @@ public sealed class BullyLeadershipService : ILeadershipService, IDisposable, IA
             }
         }
 
+        // An election may still be unwinding its finally block on Stop/restart.
+        await _electionGate.WaitAsync().ConfigureAwait(false);
         _electionGate.Dispose();
         _cts.Dispose();
         GC.SuppressFinalize(this);
