@@ -54,6 +54,8 @@ public class ReliabilityTests
         sink.Record(new(1, DateTimeOffset.UtcNow, 1, "Node1", AuditEventKind.MessageSent, "fail"));
         await Assert.ThrowsExceptionAsync<IOException>(() => sink.FlushAsync());
         await Assert.ThrowsExceptionAsync<IOException>(() => sink.DisposeAsync().AsTask());
+        using var exclusive = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        Assert.IsTrue(exclusive.Length > 0, "Failed storage must still release database handles.");
     }
     [TestMethod] public async Task CsvExportsAllRoundsWithInvariantNumbers()
     {

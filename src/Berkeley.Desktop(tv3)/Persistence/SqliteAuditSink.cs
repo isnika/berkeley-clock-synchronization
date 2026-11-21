@@ -15,7 +15,8 @@ namespace Berkeley.Desktop.Persistence;
 public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
 {
     private readonly string _connectionString;
-    private readonly Channel<Func<Task>> _eventChannel;
+    private sealed record WriteItem(AuditEvent? Event = null, Func<Task>? Job = null);
+    private readonly Channel<WriteItem> _eventChannel;
     private readonly Task _writerTask;
     private bool _disposed;
     private Exception? _writeError;
@@ -30,7 +31,7 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(dbPath))!);
         _connectionString = $"Data Source={dbPath}";
 
-        _eventChannel = Channel.CreateBounded<Func<Task>>(new BoundedChannelOptions(4096) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
+        _eventChannel = Channel.CreateBounded<WriteItem>(new BoundedChannelOptions(4096) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
 
         InitializeDatabase();
         _writerTask = Task.Run(ProcessQueueAsync);
@@ -75,14 +76,14 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
     public void Record(AuditEvent auditEvent)
     {
         if (_disposed) return;
-        if (!_eventChannel.Writer.TryWrite(() => WriteBatchAsync([auditEvent]))) { Fail(new IOException("Hàng đợi lưu trữ đã đầy.")); return; }
+        if (!_eventChannel.Writer.TryWrite(new(Event: auditEvent))) { Fail(new IOException("Hàng đợi lưu trữ đã đầy.")); return; }
         AuditEventLogged?.Invoke(auditEvent);
     }
 
     public void RecordRoundSummary(RoundSummary summary)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(SqliteAuditSink));
-        if (!_eventChannel.Writer.TryWrite(async () =>
+        if (!_eventChannel.Writer.TryWrite(new(Job: async () =>
         {
             try
             {
@@ -114,14 +115,37 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
                 await cmd.ExecuteNonQueryAsync();
             }
             catch (Exception ex) { Fail(ex); }
-        })) Fail(new IOException("Hàng đợi lưu trữ đã đầy."));
+        }))) Fail(new IOException("Hàng đợi lưu trữ đã đầy."));
     }
 
     private async Task ProcessQueueAsync()
     {
-        await foreach (var job in _eventChannel.Reader.ReadAllAsync())
+        // One transaction per event cannot keep up with heartbeat/status traffic
+        // on slower disks. Drain consecutive audit records into bounded batches.
+        // Summary jobs and Flush barriers retain their exact FIFO position.
+        var batch = new List<AuditEvent>(256);
+        while (await _eventChannel.Reader.WaitToReadAsync().ConfigureAwait(false))
         {
-            try { await job(); } catch (Exception ex) { Fail(ex); }
+            while (_eventChannel.Reader.TryRead(out var item))
+            {
+                if (item.Event is { } evt)
+                {
+                    batch.Add(evt);
+                    if (batch.Count < 256) continue;
+                }
+                if (batch.Count > 0)
+                {
+                    await WriteBatchAsync(batch).ConfigureAwait(false);
+                    batch.Clear();
+                }
+                if (item.Job is { } job)
+                    try { await job().ConfigureAwait(false); } catch (Exception ex) { Fail(ex); }
+            }
+            if (batch.Count > 0)
+            {
+                await WriteBatchAsync(batch).ConfigureAwait(false);
+                batch.Clear();
+            }
         }
     }
 
@@ -130,7 +154,7 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
         if (!_disposed)
         {
             var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            await _eventChannel.Writer.WriteAsync(() => { done.SetResult(); return Task.CompletedTask; });
+            await _eventChannel.Writer.WriteAsync(new(Job: () => { done.SetResult(); return Task.CompletedTask; }));
             await done.Task;
         }
         else await _writerTask;
@@ -300,6 +324,9 @@ public sealed class SqliteAuditSink : IAuditSink, IAsyncDisposable, IDisposable
     {
         if (!_disposed) { _disposed = true; _eventChannel.Writer.TryComplete(); }
         await _writerTask.ConfigureAwait(false);
+        // Return pooled native handles for this database even when storage failed.
+        using (var connection = new SqliteConnection(_connectionString))
+            SqliteConnection.ClearPool(connection);
         if (_writeError != null) throw new IOException("Không lưu được toàn bộ dữ liệu.", _writeError);
     }
 

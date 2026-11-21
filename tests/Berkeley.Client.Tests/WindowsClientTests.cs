@@ -248,8 +248,14 @@ public class WindowsClientTests
         var endpoints = ports.Select((port, index) => ($"Node{index + 1}", port)).ToArray();
         long[] skews = [120000, -180000, 90000, -90000, 210000, 0];
         var clocks = skews.Select(skew => new TestClock(1_700_000_000_000 + skew)).ToArray();
+        // This verifies six-node synchronization, not a 100 ms heartbeat stress
+        // workload on a shared CI VM. Use the production timing configuration.
+        var configs = endpoints.Select(item => Config(item.Item1, item.port,
+            endpoints.Where(peer => peer.Item1 != item.Item1))).ToArray();
+        foreach (var config in configs)
+            config.Node = config.Node with { OperationParams = new NodeOperationParams() };
         var sessions = endpoints.Select((item, i) => new ClientSession(
-            Config(item.Item1, item.port, endpoints.Where(peer => peer.Item1 != item.Item1)),
+            configs[i],
             Path.Combine(_directory, item.Item1), _ => new ClientClock(clocks[i]))).ToArray();
         try
         {
