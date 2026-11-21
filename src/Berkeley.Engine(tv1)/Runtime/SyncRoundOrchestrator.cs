@@ -497,7 +497,11 @@ public sealed class SyncRoundOrchestrator : IDisposable
         catch (OperationCanceledException) { /* timeout — thu kết quả có được */ }
 
         // Thu các offset đo lại được (chỉ Valid)
-        var offsets = new List<double>();
+        // LỖI ĐÃ SỬA: Thêm Master vào tập spread với offset = 0.
+        // Master là điểm tham chiếu của thuật toán Berkeley — spread phải đo khoảng cách
+        // giữa TẤT CẢ các node kể cả Master. Nếu bỏ Master, khi chỉ có 1 Worker trả lời
+        // thì spread luôn = 0 dù Worker còn lệch, vì spread = max([x]) - min([x]) = 0.
+        var offsets = new List<double> { 0.0 }; // 0.0 = offset của Master so với chính nó
         lock (_pendingRemeasureLock)
         {
             foreach (var tcs in _pendingRemeasure.Values)

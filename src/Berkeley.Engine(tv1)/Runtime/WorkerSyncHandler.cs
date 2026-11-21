@@ -139,23 +139,12 @@ public sealed class WorkerSyncHandler : IDisposable
             return;
         }
 
-        // [A7] Kiểm tra lệnh hết hạn (MaxAgeMs)
+        // [A7] BỎ kiểm tra tuổi lệnh theo UTC cross-machine — LỖI ĐÃ SỬA
+        // Lý do: ageMs = nowUtcMs(Worker) - SentAtUtcMs(Master) so sánh giờ UTC của 2 máy khác nhau.
+        // Khi đồng hồ Worker lệch so với Master (ví dụ nhanh hơn 2 phút) thì ageMs tính ra
+        // ~120.000ms > MaxAgeMs(10.000ms) → Worker từ chối mọi lệnh ADJUST → Berkeley thất bại.
+        // Cơ chế bảo vệ đúng đắn đã có: idempotency (MessageId) + round/session validation.
         long nowUtcMs = _clock.ReadUtcMs();
-        long ageMs = nowUtcMs - payload.SentAtUtcMs;
-        if (ageMs > payload.MaxAgeMs)
-        {
-            _audit.Record(new AuditEvent(0, DateTimeOffset.UtcNow, _clock.ReadMonotonicMs(),
-                _config.NodeId, AuditEventKind.MessageRejected,
-                $"ADJUST rejected: too old ({ageMs}ms > {payload.MaxAgeMs}ms)"));
-
-            var staleResult = new AdjustmentResult(
-                _config.NodeId, envelope.RoundId!,
-                payload.AdjustmentMs, nowUtcMs, nowUtcMs,
-                AdjustmentStatus.Rejected, $"ADJUST expired: {ageMs}ms > {payload.MaxAgeMs}ms");
-
-            SendAdjustResult(envelope, staleResult);
-            return;
-        }
 
         // [A7] Idempotency — nếu MessageId đã xử lý → báo Rejected (đã làm rồi)
         bool alreadyProcessed;
