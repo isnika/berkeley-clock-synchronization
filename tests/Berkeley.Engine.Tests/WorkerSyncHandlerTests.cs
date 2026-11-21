@@ -187,7 +187,7 @@ public class WorkerSyncHandlerTests
     }
 
     [TestMethod]
-    [Description("Worker nhận ADJUST đã hết hạn (age > MaxAgeMs) -> Báo Rejected")]
+    [Description("Worker nhận ADJUST hết hạn theo monotonic cục bộ -> Rejected, bất kể UTC hai máy")]
     public void HandleAdjust_Expired_Rejected()
     {
         _clock.SetUtcMs(100_000);
@@ -222,6 +222,41 @@ public class WorkerSyncHandlerTests
             adjust.SourceNodeId, adjust.SourceBootId, "Worker1", new TimeRequestPayload(100_000),
             adjust.RoundId, adjust.LeaderSessionId));
         _transport.SentMessages.Clear();
+    }
+
+    [TestMethod]
+    [Description("Ca sửa TV1: UTC Worker - SentAt Master vượt MaxAge nhưng lệnh còn hạn cục bộ -> Applied")]
+    public void HandleAdjust_ExpiredByUtcWithFreshLocalLease_StillApplied()
+    {
+        _clock.SetUtcMs(100_000);
+        var adjust = MessageEnvelope.Create(MessageTypes.Adjust, "Master1", Guid.NewGuid(), "Worker1",
+            new AdjustPayload(500, SentAtUtcMs: 90_000, MaxAgeMs: 3000), "round-tv1", 1);
+
+        PrimeMeasurement(adjust);
+        _transport.SimulateReceive(adjust);
+
+        Assert.AreEqual(100_500L, _clock.ReadUtcMs());
+        Assert.AreEqual(1, _clock.ApplyHistory.Count);
+        Assert.AreEqual(AdjustmentStatus.Applied,
+            _transport.SentMessages.Single().Message.DeserializePayload<AdjustResultPayload>()!.Result.Status);
+    }
+
+    [DataTestMethod]
+    [DataRow(3000, 3000, AdjustmentStatus.Applied)]
+    [DataRow(3000, 3001, AdjustmentStatus.Rejected)]
+    [DataRow(20000, 10000, AdjustmentStatus.Applied)]
+    [DataRow(20000, 10001, AdjustmentStatus.Rejected)]
+    public void HandleAdjust_LocalExpiryHonorsBothPayloadAndConfiguredLimit(int maxAgeMs, int elapsedMs, AdjustmentStatus expected)
+    {
+        var adjust = MessageEnvelope.Create(MessageTypes.Adjust, "Master1", Guid.NewGuid(), "Worker1",
+            new AdjustPayload(500, SentAtUtcMs: 0, MaxAgeMs: maxAgeMs), "round-expiry-limit", 1);
+        PrimeMeasurement(adjust);
+        _clock.AdvanceMonotonic(elapsedMs);
+        _transport.SimulateReceive(adjust);
+
+        Assert.AreEqual(expected,
+            _transport.SentMessages.Single().Message.DeserializePayload<AdjustResultPayload>()!.Result.Status);
+        Assert.AreEqual(expected == AdjustmentStatus.Applied ? 1 : 0, _clock.ApplyHistory.Count);
     }
 
     [DataTestMethod]

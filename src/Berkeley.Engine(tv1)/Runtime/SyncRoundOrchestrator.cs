@@ -500,7 +500,9 @@ public sealed class SyncRoundOrchestrator : IDisposable
         catch (OperationCanceledException) { /* timeout — thu kết quả có được */ }
 
         // Thu các offset đo lại được (chỉ Valid)
-        var offsets = new List<double> { 0 }; // Master is the reference clock.
+        // TV1 fix: include Master as the zero-offset reference. With one Worker,
+        // max([worker]) - min([worker]) would incorrectly report zero residual.
+        var offsets = new List<double> { 0.0 };
         lock (_pendingRemeasureLock)
         {
             foreach (var tcs in _pendingRemeasure.Values)

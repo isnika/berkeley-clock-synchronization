@@ -39,6 +39,7 @@ Step và spread đo lại; đồng bộ hiện được kích hoạt thủ công
 [Hướng dẫn chạy, cấu hình hai máy, dữ liệu cũ và nghiệm thu LAN](docs/huong-dan-windows.md).
 [Đối chiếu đầy đủ chức năng giao diện WPF và Windows mới](docs/doi-chieu-giao-dien-windows.md).
 [Kết quả cập nhật và kiểm chứng](docs/cap-nhat-windows-chinh.md).
+[Kết quả merge main/TV1 và 98 kiểm thử đạt](docs/ket-qua-merge-main-ui.md).
 
 ## Build, test, tạo gói EXE
 

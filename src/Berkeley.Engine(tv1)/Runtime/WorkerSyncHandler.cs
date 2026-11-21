@@ -151,8 +151,11 @@ public sealed class WorkerSyncHandler : IDisposable
             return;
         }
 
-        // UTC clocks are not synchronized yet. Bound ADJUST by the local
-        // measurement lease for this exact round/session/Master process instead.
+        // TV1 fix: never compare Worker UTC with Master SentAtUtcMs; the clocks
+        // may differ by minutes, which is exactly what Berkeley must correct.
+        // Keep the local monotonic measurement lease from the UI branch:
+        // session/idempotency alone cannot expire a delayed, previously unseen ADJUST.
+        // The lease must match this exact round/session/Master process (BootId).
         long nowUtcMs = _clock.ReadUtcMs();
         long ageMs;
         bool matchesMeasurement;

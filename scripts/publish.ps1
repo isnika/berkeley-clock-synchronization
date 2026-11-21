@@ -17,5 +17,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows publish failed' }
 Copy-Item -LiteralPath (Join-Path $repo 'docs/huong-dan-windows.md') -Destination $publish
 Copy-Item -LiteralPath (Join-Path $repo 'docs/doi-chieu-giao-dien-windows.md') -Destination $publish
 Copy-Item -LiteralPath (Join-Path $repo 'docs/cap-nhat-windows-chinh.md') -Destination $publish
+Copy-Item -LiteralPath (Join-Path $repo 'docs/ket-qua-merge-main-ui.md') -Destination $publish
 Compress-Archive -LiteralPath $publish -DestinationPath ($publish + '.zip')
 Write-Output ($publish + '.zip')

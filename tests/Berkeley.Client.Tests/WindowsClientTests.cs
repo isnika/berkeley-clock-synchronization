@@ -156,6 +156,50 @@ public class WindowsClientTests
         finally { foreach (var session in sessions.Reverse()) await session.DisposeAsync(); }
     }
 
+    [TestMethod]
+    public async Task SixWindowsClients_RealTcp_TwoCompleteRoundsConvergeAndPersist()
+    {
+        var ports = new HashSet<int>();
+        while (ports.Count < 6) ports.Add(NetworkingTestHelpers.FreePort());
+        var endpoints = ports.Select((port, index) => ($"Node{index + 1}", port)).ToArray();
+        long[] skews = [120000, -180000, 90000, -90000, 210000, 0];
+        var clocks = skews.Select(skew => new TestClock(1_700_000_000_000 + skew)).ToArray();
+        var sessions = endpoints.Select((item, i) => new ClientSession(
+            Config(item.Item1, item.port, endpoints.Where(peer => peer.Item1 != item.Item1)),
+            Path.Combine(_directory, item.Item1), _ => new ClientClock(clocks[i]))).ToArray();
+        try
+        {
+            foreach (var session in sessions) await session.StartAsync();
+            await NetworkingTestHelpers.WaitUntilAsync(() => sessions.All(s => !s.IsElecting &&
+                s.Snapshot()?.CurrentMasterId == "Node6" &&
+                s.Snapshot()!.KnownPeers.Count(p => p.ConnectionState == PeerConnectionState.Connected) == 5)
+                && sessions.Select(s => s.Snapshot()!.LeaderSessionId).Distinct().Count() == 1,
+                TimeSpan.FromSeconds(15), "Six Windows clients did not connect and agree on Node6.");
+
+            var rounds = new List<RoundSummary>();
+            sessions[5].RoundCompleted += rounds.Add;
+            for (int i = 0; i < 2; i++)
+            {
+                Assert.IsTrue(await sessions[5].SyncAsync());
+                var summary = rounds[i];
+                Assert.AreEqual(RoundOutcome.Success, summary.Outcome);
+                Assert.AreEqual(5, summary.AcceptedSamples.Count);
+                Assert.AreEqual(0, summary.RejectedSamples.Count);
+                Assert.AreEqual(6, summary.AdjustmentResults.Count);
+                Assert.IsTrue(summary.AdjustmentResults.All(result => result.Status == AdjustmentStatus.Applied));
+                Assert.IsTrue(summary.RemeasuredSpreadMs is >= 0 and < 100);
+                var times = clocks.Select(clock => clock.ReadUtcMs()).ToArray();
+                Assert.IsTrue(times.Max() - times.Min() < 100, "Six clocks failed to converge.");
+            }
+            await sessions[5].Audit.FlushAsync();
+            Assert.AreEqual(2, (await sessions[5].Audit.GetRecentRoundsAsync()).Count);
+            string export = Path.Combine(_directory, "six-clients.csv");
+            await sessions[5].Audit.ExportRoundsToCsvAsync(export);
+            Assert.AreEqual(3, File.ReadAllLines(export).Length);
+        }
+        finally { foreach (var session in sessions.Reverse()) await session.DisposeAsync(); }
+    }
+
     private static AppConfig Config(string id, int port, IEnumerable<(string, int)> peers)
     {
         var node = NetworkingTestHelpers.Config(id, port, peers, 100, 1500, 400);
