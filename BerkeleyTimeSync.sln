@@ -1,14 +1,16 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Berkeley.Windows", "src\Berkeley.Windows\Berkeley.Windows.csproj", "{EE5E24CB-83A3-4551-A6C1-0523A0101499}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Berkeley.Contracts", "src\Berkeley.Contracts(chung)\Berkeley.Contracts.csproj", "{A1000001-0000-0000-0000-000000000001}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Berkeley.Engine", "src\Berkeley.Engine(tv1)\Berkeley.Engine.csproj", "{A1000002-0000-0000-0000-000000000002}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Berkeley.Networking", "src\Berkeley.Networking(tv2)\Berkeley.Networking.csproj", "{A1000003-0000-0000-0000-000000000003}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Berkeley.Desktop", "src\Berkeley.Desktop(tv3)\Berkeley.Desktop.csproj", "{A1000004-0000-0000-0000-000000000004}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Berkeley.Desktop (legacy WPF)", "src\Berkeley.Desktop(tv3)\Berkeley.Desktop.csproj", "{A1000004-0000-0000-0000-000000000004}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Berkeley.Engine.Tests", "tests\Berkeley.Engine.Tests\Berkeley.Engine.Tests.csproj", "{B1000001-0000-0000-0000-000000000001}"
 EndProject
@@ -25,6 +27,10 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Berkeley.Engine(tv1)", "Berkeley.Engine(tv1)", "{CAA47FB2-26BD-FC48-DDDB-75349D591CA5}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Berkeley.Networking(tv2)", "Berkeley.Networking(tv2)", "{7915F2D0-25B8-C74B-CB60-B3DDE2E21612}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Berkeley.Client", "src\Berkeley.Client\Berkeley.Client.csproj", "{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Berkeley.Client.Tests", "tests\Berkeley.Client.Tests\Berkeley.Client.Tests.csproj", "{568504C2-E306-4E3F-B925-295AB7385931}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -120,6 +126,42 @@ Global
 		{D255BA7B-FF65-48A5-AF52-026CB60B6462}.Release|x64.Build.0 = Release|Any CPU
 		{D255BA7B-FF65-48A5-AF52-026CB60B6462}.Release|x86.ActiveCfg = Release|Any CPU
 		{D255BA7B-FF65-48A5-AF52-026CB60B6462}.Release|x86.Build.0 = Release|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Debug|x64.Build.0 = Debug|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Debug|x86.Build.0 = Debug|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Release|x64.ActiveCfg = Release|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Release|x64.Build.0 = Release|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Release|x86.ActiveCfg = Release|Any CPU
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C}.Release|x86.Build.0 = Release|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Debug|x64.Build.0 = Debug|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Debug|x86.Build.0 = Debug|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Release|x64.ActiveCfg = Release|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Release|x64.Build.0 = Release|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Release|x86.ActiveCfg = Release|Any CPU
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499}.Release|x86.Build.0 = Release|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Debug|x64.Build.0 = Debug|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Debug|x86.Build.0 = Debug|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Release|Any CPU.Build.0 = Release|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Release|x64.ActiveCfg = Release|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Release|x64.Build.0 = Release|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Release|x86.ActiveCfg = Release|Any CPU
+		{568504C2-E306-4E3F-B925-295AB7385931}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -129,5 +171,8 @@ Global
 		{46CCF5A6-8B74-1A4C-63FA-7667B8195D55} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{CAA47FB2-26BD-FC48-DDDB-75349D591CA5} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{7915F2D0-25B8-C74B-CB60-B3DDE2E21612} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{FA95FC12-63D9-4D3A-91A5-E6D31120FD2C} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{EE5E24CB-83A3-4551-A6C1-0523A0101499} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{568504C2-E306-4E3F-B925-295AB7385931} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

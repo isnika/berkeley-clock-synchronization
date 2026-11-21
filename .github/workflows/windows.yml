@@ -3,6 +3,8 @@ on: [push, pull_request]
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      AVALONIA_TELEMETRY_OPTOUT: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

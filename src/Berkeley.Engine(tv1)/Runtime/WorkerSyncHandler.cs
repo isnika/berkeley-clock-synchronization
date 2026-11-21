@@ -29,6 +29,10 @@ public sealed class WorkerSyncHandler : IDisposable
     private readonly Queue<Guid> _processedQueue = [];
     private const int MaxProcessedIds = 1000;
 
+    // One bounded round lease, timed only by this Worker's monotonic clock.
+    private readonly object _measurementLock = new();
+    private (string? RoundId, long? SessionId, Guid BootId, long ReceivedAt)? _measurement;
+
     private bool _disposed;
 
     public WorkerSyncHandler(
@@ -92,6 +96,14 @@ public sealed class WorkerSyncHandler : IDisposable
             return;
         }
 
+        lock (_measurementLock)
+        {
+            // Repeated requests for the same round must not extend its lifetime.
+            if (_measurement is not { } previous || previous.RoundId != envelope.RoundId ||
+                previous.SessionId != envelope.LeaderSessionId || previous.BootId != envelope.SourceBootId)
+                _measurement = (envelope.RoundId, envelope.LeaderSessionId, envelope.SourceBootId, _clock.ReadMonotonicMs());
+        }
+
         // T3 đọc ngay trước khi gửi — sai số chủ yếu ở thời gian serialize TCP (nhỏ)
         long t3 = _clock.ReadUtcMs();
 
@@ -139,19 +151,28 @@ public sealed class WorkerSyncHandler : IDisposable
             return;
         }
 
-        // [A7] Kiểm tra lệnh hết hạn (MaxAgeMs)
+        // UTC clocks are not synchronized yet. Bound ADJUST by the local
+        // measurement lease for this exact round/session/Master process instead.
         long nowUtcMs = _clock.ReadUtcMs();
-        long ageMs = nowUtcMs - payload.SentAtUtcMs;
-        if (ageMs > payload.MaxAgeMs)
+        long ageMs;
+        bool matchesMeasurement;
+        lock (_measurementLock)
+        {
+            matchesMeasurement = _measurement is { } m && m.RoundId == envelope.RoundId &&
+                m.SessionId == envelope.LeaderSessionId && m.BootId == envelope.SourceBootId;
+            ageMs = _measurement is { } measurement ? _clock.ReadMonotonicMs() - measurement.ReceivedAt : -1;
+        }
+        int maxAgeMs = Math.Min(payload.MaxAgeMs, _config.OperationParams.SampleMaxAgeMs);
+        if (!matchesMeasurement || ageMs < 0 || maxAgeMs <= 0 || ageMs > maxAgeMs)
         {
             _audit.Record(new AuditEvent(0, DateTimeOffset.UtcNow, _clock.ReadMonotonicMs(),
                 _config.NodeId, AuditEventKind.MessageRejected,
-                $"ADJUST rejected: too old ({ageMs}ms > {payload.MaxAgeMs}ms)"));
+                $"ADJUST rejected: missing/mismatched or expired measurement lease (age={ageMs}ms, limit={maxAgeMs}ms)"));
 
             var staleResult = new AdjustmentResult(
                 _config.NodeId, envelope.RoundId!,
                 payload.AdjustmentMs, nowUtcMs, nowUtcMs,
-                AdjustmentStatus.Rejected, $"ADJUST expired: {ageMs}ms > {payload.MaxAgeMs}ms");
+                AdjustmentStatus.Rejected, "ADJUST requires a matching, unexpired measurement lease");
 
             SendAdjustResult(envelope, staleResult);
             return;
@@ -203,7 +224,7 @@ public sealed class WorkerSyncHandler : IDisposable
         _audit.Record(new AuditEvent(0, DateTimeOffset.UtcNow, _clock.ReadMonotonicMs(),
             _config.NodeId, auditKind,
             $"ApplyStep {payload.AdjustmentMs:+0.0;-0.0}ms → {result.Status}" +
-            (result.ErrorMessage != null ? $" ({result.ErrorMessage})" : "")));
+            (result.ErrorMessage != null ? $" ({result.ErrorMessage})" : ""), result));
 
         SendAdjustResult(envelope, result);
     }
@@ -261,8 +282,7 @@ public sealed class WorkerSyncHandler : IDisposable
             return false;
         }
 
-        if (envelope.LeaderSessionId.HasValue &&
-            envelope.LeaderSessionId.Value != leader.LeaderSessionId)
+        if (envelope.LeaderSessionId != leader.LeaderSessionId)
         {
             _audit.Record(new AuditEvent(0, DateTimeOffset.UtcNow, _clock.ReadMonotonicMs(),
                 _config.NodeId, AuditEventKind.MessageRejected,

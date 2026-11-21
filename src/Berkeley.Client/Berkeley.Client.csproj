@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Berkeley.Engine(tv1)/Berkeley.Engine.csproj" />
+    <ProjectReference Include="../Berkeley.Networking(tv2)/Berkeley.Networking.csproj" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.2" />
+  </ItemGroup>
+  <!-- Compile the existing platform-neutral services without referencing WPF.
+       Windows Desktop continues compiling these files exactly as before. -->
+  <ItemGroup>
+    <Compile Include="../Berkeley.Desktop(tv3)/Configuration/*.cs" Link="Shared/Configuration/%(Filename)%(Extension)" />
+    <Compile Include="../Berkeley.Desktop(tv3)/Persistence/SqliteAuditSink.cs" Link="Shared/SqliteAuditSink.cs" />
+    <Compile Include="../Berkeley.Desktop(tv3)/Services/Simulated*.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../Berkeley.Desktop(tv3)/Services/Verification.cs" Link="Shared/Verification.cs" />
+  </ItemGroup>
+</Project>

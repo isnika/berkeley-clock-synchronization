@@ -1,6 +1,8 @@
+> **Hướng dẫn hiện hành:** [Windows với giao diện mới](huong-dan-windows.md). Bản Avalonia `Berkeley.Windows` là bản chính; nội dung WPF bên dưới giữ để đối chiếu. `scripts/publish.ps1` hiện đóng gói giao diện mới.
+
 # Chạy và kiểm chứng Desktop TV3
 
-Bản cập nhật 20/11/2026 trên nhánh feature/ui.
+Bản cập nhật 21/11/2026 trên nhánh feature/ui. Kết quả sửa Engine và hướng dẫn nghiệm thu LAN: [Sẵn sàng thử máy thật](san-sang-thu-lan-2026-11-21.md).
 
 - Chạy EXE từ thư mục đã giải nén. Bản self-contained không cần SDK.
 - Cấu hình và DB được lưu ở `%LOCALAPPDATA%\BerkeleyTimeSync`. File cấu hình cũ bên cạnh EXE không được tự nhập; sao lưu rồi chuyển `node_config.json` tới vị trí mới nếu cần. Cấu hình không hợp lệ sẽ báo lỗi và giữ nguyên file.
@@ -24,4 +26,6 @@ dotnet test BerkeleyTimeSync.sln -c Release
 
 Cần nghiệm thu trên 2 máy độc lập trước, rồi 3 máy với lỗi Master, cuối cùng 6 máy. Thu số đo trước/sau, kết quả Step, log và CSV. Xác định IP thật/cổng TCP/firewall và trạng thái Windows Time trước thử; phục hồi nguồn đồng bộ giờ chuẩn sau thử.
 
-Các phụ thuộc TV1/TV2 đã ghi trong `ke-hoach-hoan-thien-tv3.md` vẫn còn: tuổi ADJUST đang so UTC hai máy lệch nhau; spread đo lại thiếu Master; một số nhánh timeout/hủy chưa hoàn thiện; danh tính phiên và số mẫu đo lại cần xác nhận. Không coi nhãn đạt ngưỡng của Desktop là chứng nhận toàn bộ cụm khi các phụ thuộc này chưa xử lý. TV3 không sửa Engine/Networking trong đợt này.
+Ba lỗi Engine phát hiện ngày 21/11 đã được sửa: tuổi ADJUST dùng thời gian monotonic từ lần nhận TIME_REQUEST cùng vòng/phiên/BootId; spread đo lại gồm Master và yêu cầu đủ mẫu của các Worker tham gia; trạng thái vòng được trả về Idle khi kết thúc, kể cả thất bại. Đã thêm kiểm tra hủy sau Adjust và sau đo lại. Các máy phải chạy cùng bản mới vì quy tắc kiểm tra ADJUST đã thay đổi dù cấu trúc JSON giữ nguyên.
+
+Kết quả chỉ xác nhận các node tham gia vòng, không chứng nhận tất cả peer cấu hình đang online. Trước nghiệm thu 6 máy phải kiểm tra đủ 6/6 online, 5 mẫu Worker hợp lệ và 6 kết quả Step. Vẫn cần nghiệm thu trên LAN vật lý, kiểm tra DPI/nhập liệu và tải kéo dài; AutoSync chưa có luồng thực thi.

@@ -113,6 +113,8 @@ public record HeartbeatPayload(long SentUtcMs, long MonotonicMs);
 public record ElectionPayload(string CandidateNodeId, long? LeaderSessionId = null);
 public record TimeRequestPayload(long T1MasterSendUtcMs);
 public record TimeResponsePayload(long T1MasterSendUtcMs, long T2WorkerRecvUtcMs, long T3WorkerSendUtcMs);
+// SentAtUtcMs is diagnostic only: clocks may be minutes apart before synchronization.
+// MaxAgeMs bounds the Worker's monotonic lease since TIME_REQUEST for this round.
 public record AdjustPayload(double AdjustmentMs, long SentAtUtcMs, int MaxAgeMs);
 public record AdjustResultPayload(AdjustmentResult Result);
 public record RoundResultPayload(RoundSummary Summary);

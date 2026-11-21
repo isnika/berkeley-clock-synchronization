@@ -1,0 +1,231 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:client="using:Berkeley.Client" x:Class="Berkeley.Windows.MainWindow"
+        Title="Berkeley Time Sync — Windows" Width="1440" Height="940" MinWidth="1000" MinHeight="700"
+        Background="#0C1524" WindowState="Maximized">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="16" RowSpacing="8">
+    <Grid ColumnDefinitions="*,Auto">
+      <StackPanel Spacing="4">
+        <TextBlock Text="BERKELEY TIME SYNC" FontSize="25" FontWeight="Bold" />
+        <TextBlock Text="{Binding Identity}" Classes="caption"/>
+        <TextBlock Text="{Binding Mode}" Foreground="#7DD3FC"/>
+      </StackPanel>
+      <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+        <TextBlock Text="{Binding LocalTime}" FontSize="30" FontWeight="Light"/>
+        <TextBlock Text="{Binding UtcTime}" HorizontalAlignment="Right" Classes="caption"/>
+        <TextBlock Text="{Binding Date}" HorizontalAlignment="Right" Classes="caption"/>
+      </StackPanel>
+    </Grid>
+    <Border Grid.Row="1" Classes="card" Padding="12">
+      <StackPanel Spacing="6">
+        <WrapPanel Orientation="Horizontal">
+          <TextBlock Text="{Binding Role}" FontWeight="Bold" Foreground="#FBBF24" Margin="0,0,20,0"/>
+          <TextBlock Text="Master / phiên: " Classes="caption"/><TextBlock Text="{Binding Master}" Margin="0,0,20,0"/>
+          <TextBlock Text="{Binding Connected}" Foreground="#6EE7B7" Margin="0,0,20,0"/>
+          <TextBlock Text="{Binding Permission}" TextWrapping="Wrap"/>
+        </WrapPanel>
+        <WrapPanel Orientation="Horizontal">
+          <Button Content="Khởi động" Command="{Binding StartCommand}" Margin="0,0,8,4"/>
+          <Button Content="Dừng Node" Command="{Binding StopCommand}" Margin="0,0,8,4"/>
+          <Button Content="ĐỒNG BỘ NGAY" Classes="primary" Command="{Binding SyncCommand}" Margin="0,0,8,4"/>
+          <Button Content="Bầu chọn / Demo Bully" ToolTip.Tip="Mạng thật: yêu cầu bầu chọn. Để thử mất Master, dừng Node trên máy Master." Command="{Binding ElectCommand}" Margin="0,0,20,4"/>
+          <TextBox Text="{Binding DriftMinutes}" Width="100" MinWidth="80" Watermark="Phút +/-" Margin="0,0,8,4"/>
+          <Button Content="Chỉnh lệch (phút)" ToolTip.Tip="Chế độ thật sẽ yêu cầu xác nhận trước khi đổi giờ Windows." Command="{Binding DriftCommand}" Margin="0,0,8,4"/>
+          <TextBlock Text="Chỉnh lệch nhanh:" VerticalAlignment="Center" Margin="0,0,10,4" Classes="caption"/>
+          <Button Content="+2 phút" ToolTip.Tip="Giờ thật sẽ yêu cầu xác nhận." Command="{Binding QuickDriftCommand}" CommandParameter="2" Margin="0,0,8,4"/>
+          <Button Content="−1 phút" ToolTip.Tip="Giờ thật sẽ yêu cầu xác nhận." Command="{Binding QuickDriftCommand}" CommandParameter="-1" Margin="0,0,8,4"/>
+          <Button Content="−3 phút" ToolTip.Tip="Giờ thật sẽ yêu cầu xác nhận." Command="{Binding QuickDriftCommand}" CommandParameter="-3" Margin="0,0,8,4"/>
+        </WrapPanel>
+        <TextBlock Text="{Binding OperatorHint}" TextWrapping="Wrap" Foreground="#7DD3FC"/>
+        <Border IsVisible="{Binding IsElecting}" Background="#352448" Padding="8" CornerRadius="4">
+          <StackPanel><TextBlock Text="BULLY · ĐANG BẦU CHỌN MASTER" FontWeight="Bold"/><TextBlock Text="{Binding ElectionStatus}" TextWrapping="Wrap"/></StackPanel>
+        </Border>
+      </StackPanel>
+    </Border>
+    <TabControl Grid.Row="2" SelectedIndex="{Binding SelectedTab}">
+      <TabItem><TabItem.Header><TextBlock Text="Bảng điều khiển" FontSize="18"/></TabItem.Header>
+        <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="6" Margin="0,8,0,0">
+          <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+            <Border Classes="card" Padding="12"><StackPanel><TextBlock Text="ĐỘ LỆCH TRUNG BÌNH" Classes="caption"/><TextBlock Text="{Binding Average}" Classes="heading"/></StackPanel></Border>
+            <Border Grid.Column="1" Classes="card" Padding="12"><StackPanel><TextBlock Text="SPREAD TRƯỚC" Classes="caption"/><TextBlock Text="{Binding Before}" Classes="heading"/></StackPanel></Border>
+            <Border Grid.Column="2" Classes="card" Padding="12"><StackPanel><TextBlock Text="SPREAD SAU (GỒM MASTER)" Classes="caption"/><TextBlock Text="{Binding After}" Classes="heading"/></StackPanel></Border>
+            <Border Grid.Column="3" Classes="card" Padding="12"><StackPanel><TextBlock Text="TRẠNG THÁI VÒNG" Classes="caption"/><TextBlock Text="{Binding PhaseDescription}" Classes="heading"/></StackPanel></Border>
+          </Grid>
+          <StackPanel Grid.Row="1" Spacing="5">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding Verdict}" TextWrapping="Wrap" Foreground="{Binding VerdictColor}"/>
+              <Button Grid.Column="1" Content="×" ToolTip.Tip="Ẩn thông báo kết quả" IsVisible="{Binding ResultVisible}" Command="{Binding DismissResultCommand}" Margin="12,0,0,0"/>
+            </Grid>
+            <Border IsVisible="{Binding ResultVisible}" BorderBrush="{Binding VerdictColor}" BorderThickness="2" CornerRadius="4" Padding="10,5">
+              <TextBlock Text="Vòng đã kết thúc · kiểm tra từng Step, số mẫu hợp lệ và lịch sử SQLite." TextWrapping="Wrap"/>
+            </Border>
+          </StackPanel>
+          <StackPanel Grid.Row="2" Spacing="5">
+            <WrapPanel><TextBlock Text="{Binding RoundId, StringFormat='Round ID: {0}'}" Classes="caption" Margin="0,0,20,0"/><TextBlock Text="{Binding Threshold}" Classes="caption"/></WrapPanel>
+            <ProgressBar Minimum="0" Maximum="3" Value="{Binding PhaseProgress}" Height="5"/>
+          </StackPanel>
+          <TabControl Grid.Row="3" SelectedIndex="{Binding MonitorTab}">
+            <TabItem><TabItem.Header><TextBlock Text="Cụm máy · kết nối và Step" FontSize="15"/></TabItem.Header>
+              <Grid RowDefinitions="Auto,*" RowSpacing="8" Margin="0,8,0,0">
+                <TextBlock Text="Step gần nhất được giữ để đối chiếu. Dùng bảng mẫu đo để xem kết quả theo vòng; kéo ngang để xem toàn bộ cột." Classes="caption" TextWrapping="Wrap"/>
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Nodes}" AutoGenerateColumns="False" IsReadOnly="True">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Node" Binding="{Binding NodeId}" Width="100"/>
+                <DataGridTextColumn Header="Tên máy" Binding="{Binding Name}" Width="150"/>
+                <DataGridTextColumn Header="Vai trò" Binding="{Binding Role}" Width="140"/>
+                <DataGridTemplateColumn Header="Kết nối" Width="155"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                  <TextBlock Text="{Binding Connection}" Foreground="{Binding ConnectionColor}" VerticalAlignment="Center"/>
+                </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                <DataGridTextColumn Header="IP / cổng" Binding="{Binding Endpoint}" Width="190"/>
+                <DataGridTextColumn Header="RTT" Binding="{Binding Rtt}" Width="100"/>
+                <DataGridTextColumn Header="Offset" Binding="{Binding Offset}" Width="120"/>
+                <DataGridTextColumn Header="Mức chỉnh" Binding="{Binding Adjustment}" Width="120"/>
+                <DataGridTemplateColumn Header="Step gần nhất" Width="140"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                  <TextBlock Text="{Binding Step}" Foreground="{Binding StepColor}" VerticalAlignment="Center"/>
+                </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                <DataGridTextColumn Header="Lần thấy" Binding="{Binding LastSeen}" Width="100"/>
+              <DataGridTextColumn Header="Chi tiết lỗi" Binding="{Binding Note}" Width="260"/>
+              </DataGrid.Columns>
+            </DataGrid>
+              </Grid>
+            </TabItem>
+            <TabItem><TabItem.Header><TextBlock Text="Mẫu đo t1–t4 · kết quả hiệu chỉnh" FontSize="15"/></TabItem.Header>
+              <Grid RowDefinitions="Auto,*" RowSpacing="8" Margin="0,8,0,0">
+                <TextBlock Text="UTC · Offset = ((t2 − t1) + (t3 − t4)) / 2 · RTT = (t4 − t1) − (t3 − t2) · Step Worker = d_avg − d_i" Classes="caption" TextWrapping="Wrap"/>
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Samples}" AutoGenerateColumns="False" IsReadOnly="True">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Node" Binding="{Binding NodeId}" Width="130"/>
+                <DataGridTextColumn Header="t1 (UTC)" Binding="{Binding T1}" Width="115"/>
+                <DataGridTextColumn Header="t2 (UTC)" Binding="{Binding T2}" Width="115"/>
+                <DataGridTextColumn Header="t3 (UTC)" Binding="{Binding T3}" Width="115"/>
+                <DataGridTextColumn Header="t4 (UTC)" Binding="{Binding T4}" Width="115"/>
+                <DataGridTextColumn Header="RTT" Binding="{Binding Rtt}" Width="100"/>
+                <DataGridTextColumn Header="Offset" Binding="{Binding Offset}" Width="120"/>
+                <DataGridTextColumn Header="Mức chỉnh" Binding="{Binding Adjustment}" Width="120"/>
+                <DataGridTextColumn Header="Mẫu" Binding="{Binding Status}" Width="150"/>
+                <DataGridTextColumn Header="Step" Binding="{Binding Step}" Width="140"/>
+                <DataGridTextColumn Header="Chi tiết lỗi" Binding="{Binding Note}" Width="300"/>
+              </DataGrid.Columns>
+            </DataGrid>
+              </Grid>
+            </TabItem>
+            <TabItem><TabItem.Header><TextBlock Text="Nhật ký TCP / audit" FontSize="15"/></TabItem.Header>
+              <Grid RowDefinitions="Auto,*" RowSpacing="8" Margin="0,8,0,0">
+                <WrapPanel>
+                  <ComboBox ItemsSource="{Binding LogFilters}" SelectedItem="{Binding LogFilter}" Width="140" Margin="0,0,8,4"/>
+                  <TextBox Text="{Binding LogSearch}" Watermark="Tìm nội dung, node, loại sự kiện" Width="300" Margin="0,0,8,4"/>
+                  <Button Content="Xuất toàn bộ audit CSV" Command="{Binding ExportAuditCommand}" Margin="0,0,8,4"/>
+                  <Button Content="Xóa log hiển thị" Command="{Binding ClearLogViewCommand}" Margin="0,0,8,4"/>
+                </WrapPanel>
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Logs}" AutoGenerateColumns="False" IsReadOnly="True">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Giờ local" Binding="{Binding Time}" Width="120"/>
+                <DataGridTextColumn Header="Node" Binding="{Binding NodeId}" Width="100"/>
+                <DataGridTextColumn Header="Loại" Binding="{Binding Kind}" Width="160"/>
+                <DataGridTextColumn Header="Nội dung" Binding="{Binding Summary}" Width="*"/>
+              </DataGrid.Columns>
+            </DataGrid>
+              </Grid>
+            </TabItem>
+          </TabControl>
+        </Grid>
+      </TabItem>
+      <TabItem><TabItem.Header><TextBlock Text="Cấu hình mạng" FontSize="18"/></TabItem.Header>
+        <ScrollViewer>
+          <StackPanel Spacing="14" Margin="0,12,0,12">
+            <TextBlock Text="Danh tính và chế độ chạy" Classes="heading"/>
+            <TextBlock Text="Dùng Node ID duy nhất. Các máy Windows giao tiếp qua TCP/JSON. IP mẫu phải được thay bằng IP LAN thực tế." TextWrapping="Wrap" Classes="caption"/>
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
+              <StackPanel><TextBlock Text="Node ID"/><TextBox Text="{Binding ConfigNodeId}"/></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Text="Tên hiển thị"/><TextBox Text="{Binding ConfigName}"/></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="IP lắng nghe"/><TextBox Text="{Binding ConfigAddress}"/><ComboBox ItemsSource="{Binding AvailableIps}" SelectedItem="{Binding ConfigAddress}" PlaceholderText="IP trên máy này"/></StackPanel>
+              <StackPanel Grid.Column="3"><TextBlock Text="Cổng TCP"/><TextBox Text="{Binding ConfigPort}"/></StackPanel>
+            </Grid>
+            <WrapPanel>
+              <CheckBox Content="Demo mô phỏng · không đổi giờ hệ điều hành" IsChecked="{Binding ConfigDemo}" Margin="0,0,25,0"/>
+              <CheckBox Content="Tự khởi động Node khi mở ứng dụng" IsChecked="{Binding ConfigAutoStart}"/>
+            </WrapPanel>
+            <TextBlock Text="Bỏ chọn Demo để dùng TCP và chỉnh giờ thật. Chạy bằng quyền Administrator để chỉnh giờ Windows thật. Đồng bộ được kích hoạt thủ công." TextWrapping="Wrap" Foreground="#FBBF24"/>
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="12">
+              <StackPanel><TextBlock Text="Heartbeat interval (ms)"/><TextBox Text="{Binding ConfigHeartbeat}"/></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Text="Heartbeat timeout (ms)"/><TextBox Text="{Binding ConfigHeartbeatTimeout}"/></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="Election timeout (ms)"/><TextBox Text="{Binding ConfigElectionTimeout}"/></StackPanel>
+              <StackPanel Grid.Column="3"><TextBlock Text="Ngưỡng spread (giây, dấu chấm)"/><TextBox Text="{Binding ConfigThreshold}"/></StackPanel>
+              <StackPanel Grid.Row="1"><TextBlock Text="Sample timeout (ms)"/><TextBox Text="{Binding ConfigSampleTimeout}"/></StackPanel>
+              <StackPanel Grid.Row="1" Grid.Column="1"><TextBlock Text="Sample max age (ms)"/><TextBox Text="{Binding ConfigMaxAge}"/></StackPanel>
+              <StackPanel Grid.Row="1" Grid.Column="2"><TextBlock Text="Round timeout (ms)"/><TextBox Text="{Binding ConfigRoundTimeout}"/></StackPanel>
+            </Grid>
+            <TextBlock Text="Danh sách peer" Classes="heading"/>
+            <ItemsControl ItemsSource="{Binding ConfigPeers}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="160,*,140,Auto" ColumnSpacing="8" Margin="0,0,0,8">
+                    <TextBox Text="{Binding NodeId}" Watermark="Node ID"/>
+                    <TextBox Grid.Column="1" Text="{Binding Address}" Watermark="IP LAN"/>
+                    <TextBox Grid.Column="2" Text="{Binding Port}" Watermark="Cổng"/>
+                    <Button Grid.Column="3" Content="Bỏ peer" Command="{Binding $parent[Window].DataContext.RemovePeerCommand}" CommandParameter="{Binding}"/>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <WrapPanel>
+              <Button Content="Thêm peer" Command="{Binding AddPeerCommand}" Margin="0,0,8,4"/>
+              <Button Content="Nạp mẫu LAN 6 máy" Command="{Binding LoadLanPresetCommand}" Margin="0,0,8,4"/>
+              <Button Content="LƯU VÀ KHỞI ĐỘNG LẠI" Classes="primary" Command="{Binding SaveConfigCommand}" Margin="0,0,8,4"/>
+            </WrapPanel>
+            <TextBlock Text="{Binding DataLocation, StringFormat='Thư mục cấu hình / DB: {0}'}" TextWrapping="Wrap" Classes="caption"/>
+            <TextBlock Text="Demo và mạng thật có DB riêng. Giữ cấu hình và lịch sử của giao diện mới. Cấu hình WPF cũ được lưu riêng; xem hướng dẫn chuyển cấu hình." TextWrapping="Wrap" Classes="caption"/>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem><TabItem.Header><TextBlock Text="Lịch sử SQLite" FontSize="18"/></TabItem.Header>
+        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="12" Margin="0,12,0,0">
+          <TextBlock Text="50 vòng gần nhất trong chế độ hiện tại · Xuất CSV lấy toàn bộ vòng đã lưu" TextWrapping="Wrap"/>
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+            <Button Content="Tải lại" Command="{Binding RefreshHistoryCommand}"/>
+            <Button Content="Xuất toàn bộ lịch sử CSV" Command="{Binding ExportHistoryCommand}"/>
+          </StackPanel>
+          <DataGrid Grid.Row="2" ItemsSource="{Binding History}" AutoGenerateColumns="False" IsReadOnly="True">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Round ID" Binding="{Binding RoundId}" Width="260"/>
+              <DataGridTextColumn Header="Master" Binding="{Binding MasterNodeId}" Width="100"/>
+              <DataGridTextColumn Header="Phiên" Binding="{Binding LeaderSessionId}" Width="80"/>
+              <DataGridTextColumn Header="Bắt đầu (UTC)" Binding="{Binding StartedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss zzz}'}" Width="230"/>
+              <DataGridTextColumn Header="Kết thúc (UTC)" Binding="{Binding EndedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss zzz}'}" Width="230"/>
+              <DataGridTextColumn Header="Offset TB (ms)" Binding="{Binding AverageOffsetMs, StringFormat='{}{0:F1}'}" Width="140"/>
+              <DataGridTextColumn Header="Spread (ms)" Binding="{Binding RemeasuredSpreadMs, StringFormat='{}{0:F1}'}" Width="130"/>
+              <DataGridTextColumn Header="Kết quả" Binding="{Binding Outcome}" Width="150"/>
+              <DataGridTextColumn Header="Mẫu hợp lệ" Binding="{Binding AcceptedCount}" Width="100"/>
+              <DataGridTextColumn Header="Mẫu loại" Binding="{Binding RejectedCount}" Width="100"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </Grid>
+      </TabItem>
+      <TabItem><TabItem.Header><TextBlock Text="Nguyên lý &amp; hướng dẫn" FontSize="18"/></TabItem.Header>
+        <ScrollViewer><StackPanel Spacing="18" Margin="20">
+          <TextBlock Text="Đồng bộ Berkeley trên cụm Windows" FontSize="24" FontWeight="Bold"/>
+          <TextBlock Text="1. Mỗi máy dùng Node ID riêng và cấu hình IP/cổng của các peer. Bully chọn node có ID ưu tiên cao nhất làm Master; heartbeat dùng thời gian monotonic để phát hiện mất kết nối." TextWrapping="Wrap"/>
+          <TextBlock Text="2. Master đo t1 lúc gửi; Worker đo t2 nhận, t3 gửi; Master đo t4 nhận. Mẫu sai phiên, quá hạn, RTT bất hợp lệ được loại." TextWrapping="Wrap"/>
+          <Border Classes="card"><StackPanel Spacing="10">
+            <TextBlock Text="Offset d_i = ((t2 − t1) + (t3 − t4)) / 2" FontSize="19"/>
+            <TextBlock Text="RTT = (t4 − t1) − (t3 − t2)" FontSize="19"/>
+            <TextBlock Text="d_avg = (0 + tổng offset Worker hợp lệ) / (số Worker hợp lệ + 1)" TextWrapping="Wrap"/>
+            <TextBlock Text="Step Worker: a_i = d_avg − d_i · Step Master: a_master = d_avg" TextWrapping="Wrap"/>
+          </StackPanel></Border>
+          <TextBlock Text="3. ADJUST gắn vòng/phiên/Master BootId và thời hạn monotonic tại Worker. Mỗi kết quả Step ghi Applied, PermissionDenied, Rejected hoặc Failed. Nhãn quyền chỉ kiểm tra quyền, không thử chỉnh giờ." TextWrapping="Wrap"/>
+          <TextBlock Text="4. Master đo lại sau Step. Spread gồm Master có offset 0 và đủ Worker tham gia. Thiếu mẫu đo lại không xác nhận đạt. Trước nghiệm thu 6 máy, cần 6/6 online, 5 mẫu Worker hợp lệ và 6 kết quả Applied." TextWrapping="Wrap"/>
+          <TextBlock Text="Bầu chọn Bully khi mất Master" Classes="heading"/>
+          <TextBlock Text="Worker phát hiện quá hạn heartbeat → gửi ELECTION tới các Node ID cao hơn → nhận OK và chờ → node ưu tiên cao nhất còn sống gửi COORDINATOR → mở phiên mới. Trong mạng thật, dừng Node trên Master để kiểm tra failover; nút Bầu chọn chỉ yêu cầu bầu chọn, không làm máy khác bị crash." TextWrapping="Wrap"/>
+          <TextBlock Text="Thử trên các máy Windows thật" Classes="heading"/>
+          <TextBlock Text="Chạy Demo trước để kiểm tra giao diện. Trên mỗi máy Windows, chạy ứng dụng bằng quyền Administrator, bỏ chọn Demo và nhập Node ID riêng cùng IP LAN/cổng thực tế. Thử 2 máy trước, rồi 3 máy có mất Master và cuối cùng 6 máy. Nhấn ĐỒNG BỘ NGAY tại Master. Xem huong-dan-windows.md kèm bản phát hành và khôi phục nguồn giờ chuẩn sau thử." TextWrapping="Wrap"/>
+          <TextBlock Text="Chức năng chỉnh lệch sẽ đổi giờ hệ điều hành trong chế độ thật và luôn hỏi xác nhận. Chỉ thử trên mạng LAN tin cậy và máy thử; giao thức hiện chưa xác thực/mã hóa peer." TextWrapping="Wrap" Foreground="#FBBF24"/>
+        </StackPanel></ScrollViewer>
+      </TabItem>
+    </TabControl>
+    <Border Grid.Row="3" Background="#18263B" Padding="8" CornerRadius="6">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+        <TextBlock Text="{Binding Status}" TextWrapping="Wrap"/>
+        <TextBlock Grid.Column="1" Text="{Binding Database, StringFormat='SQLite: {0}'}" TextWrapping="Wrap" Classes="caption" MaxWidth="700" VerticalAlignment="Center"/>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

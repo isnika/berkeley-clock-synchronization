@@ -11,9 +11,10 @@ public sealed class EngineAfterElectionIntegrationTests
     [TestMethod]
     public async Task ElectedNode2_CanRunEngineRoundThroughManualApi()
     {
-        int node1Port = NetworkingTestHelpers.FreePort();
-        int node2Port = NetworkingTestHelpers.FreePort();
-        int node3Port = NetworkingTestHelpers.FreePort();
+        var ports = new HashSet<int>();
+        while (ports.Count < 3) ports.Add(NetworkingTestHelpers.FreePort());
+        var portArray = ports.ToArray();
+        int node1Port = portArray[0], node2Port = portArray[1], node3Port = portArray[2];
         var peers = new[]
         {
             ("Node1", node1Port),
@@ -21,10 +22,18 @@ public sealed class EngineAfterElectionIntegrationTests
             ("Node3", node3Port)
         };
 
-        var config1 = NetworkingTestHelpers.Config("Node1", node1Port, peers.Where(p => p.Item1 != "Node1"));
-        var config2 = NetworkingTestHelpers.Config("Node2", node2Port, peers.Where(p => p.Item1 != "Node2"));
-        var config3 = NetworkingTestHelpers.Config("Node3", node3Port, peers.Where(p => p.Item1 != "Node3"));
-        var clock1 = new TestClock();
+        var config1 = Config("Node1", node1Port);
+        var config2 = Config("Node2", node2Port);
+        var config3 = Config("Node3", node3Port);
+
+        NodeConfig Config(string id, int port)
+        {
+            // Allow scheduling jitter when all solution test assemblies run together.
+            var config = NetworkingTestHelpers.Config(id, port, peers.Where(p => p.Item1 != id), 100, 1500, 400);
+            return config with { OperationParams = config.OperationParams with
+                { SampleTimeoutMs = 1000, SampleMaxAgeMs = 5000, RoundTimeoutMs = 10000 } };
+        }
+        var clock1 = new TestClock(1_700_000_120_000);
         var clock2 = new TestClock();
         var clock3 = new TestClock();
         var audit1 = new TestAuditSink();
@@ -56,7 +65,10 @@ public sealed class EngineAfterElectionIntegrationTests
             () => leadership1.CurrentLeader?.MasterNodeId == "Node2" &&
                   leadership2.CurrentLeader?.MasterNodeId == "Node2" &&
                   leadership1.CurrentLeader?.LeaderSessionId == leadership2.CurrentLeader?.LeaderSessionId &&
-                  leadership1.CurrentLeader?.LeaderSessionId is > 1,
+                  leadership1.CurrentLeader?.LeaderSessionId is > 1 &&
+                  !leadership1.IsElecting && !leadership2.IsElecting &&
+                  transport1.GetConnectedNodeIds().SequenceEqual(new[] { "Node2" }) &&
+                  transport2.GetConnectedNodeIds().SequenceEqual(new[] { "Node1" }),
             TimeSpan.FromSeconds(5),
             "Node1 and Node2 did not elect Node2.");
 
@@ -65,10 +77,18 @@ public sealed class EngineAfterElectionIntegrationTests
         await node1.StartAsync(config1);
         await node2.StartAsync(config2);
 
+        RoundSummary? summary = null;
+        node2.RoundCompleted += result => summary = result;
         bool completed = await node2.TriggerSyncNowAsync();
 
         Assert.IsTrue(completed,
             "The elected coordinator could not complete a Berkeley round through the existing manual API.");
+        Assert.IsNotNull(summary);
+        Assert.AreEqual(RoundOutcome.Success, summary.Outcome, string.Join("\n", audit2.Events.Select(e => e.Summary)));
+        Assert.AreEqual(2, summary.AdjustmentResults.Count);
+        Assert.IsTrue(summary.AdjustmentResults.All(r => r.Status == AdjustmentStatus.Applied));
+        Assert.IsTrue(summary.RemeasuredSpreadMs is >= 0 and < 100);
+        Assert.IsTrue(Math.Abs(clock1.ReadUtcMs() - clock2.ReadUtcMs()) < 100);
 
         await node2.StopAsync();
         await node1.StopAsync();
